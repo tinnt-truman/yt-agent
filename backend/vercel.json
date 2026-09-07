@@ -1,9 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "go",
-  "functions": {
-    "cmd/server/main.go": {
-      "maxDuration": 120
-    }
-  }
+  "framework": "go"
 }

@@ -98,8 +98,11 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
   - `DATABASE_URL` = connection string Neon ở bước 1
   - `CORS_ORIGIN` = URL của frontend sau khi deploy (điền tạm `*` nếu deploy
     frontend sau, rồi quay lại sửa)
-- `backend/vercel.json` đã set `maxDuration: 120` cho bước gọi DeepSeek (free
-  plan của Vercel cho phép tới 300s/function).
+- Không cần cấu hình `maxDuration` thủ công: với Fluid Compute (mặc định cho
+  project mới), Vercel cho **300s/function** ngay cả ở Hobby — đủ dư cho bước
+  gọi DeepSeek. `maxDuration` cũng không cấu hình được qua `functions` trong
+  `vercel.json` với kiểu Go Framework Preset (chạy nguyên `cmd/server/main.go`)
+  — khóa đó chỉ áp dụng cho function kiểu file trong thư mục `api/`.
 - Sau khi deploy, mở `/config` trên domain backend (hoặc gọi thẳng
   `PUT /api/settings`) để nhập YouTube key + DeepSeek key — settings nằm
   trong Postgres, không phải biến môi trường, nên không cấu hình lại mỗi lần

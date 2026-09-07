@@ -33,9 +33,10 @@ func NewClient(apiKey, model string) *Client {
 	return &Client{
 		apiKey: apiKey,
 		model:  model,
-		// Comfortably under the backend's own Vercel function maxDuration
-		// (see backend/vercel.json) so a stuck request fails with a clear
-		// error instead of the platform silently killing the function.
+		// Comfortably under Vercel's function duration (300s on Hobby with
+		// Fluid Compute, the platform default — see backend/vercel.json) so
+		// a stuck request fails with a clear error instead of the platform
+		// silently killing the function.
 		httpClient: &http.Client{Timeout: 100 * time.Second},
 	}
 }
