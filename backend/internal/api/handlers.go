@@ -59,9 +59,37 @@ func (h *Handler) CreateAnalysis(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.worker.RunAnalysis(id, req.URL)
+	// Run the first (fast) stage inline instead of in a background goroutine:
+	// the target deployment (Vercel's Go runtime) does not keep goroutines
+	// alive once the HTTP response is sent. The slow stage (the AI call) is
+	// left for the client to advance via AdvanceStep.
+	h.worker.Step(r.Context(), id)
 
-	writeJSON(w, http.StatusAccepted, createAnalysisResponse{ID: id, Status: "pending"})
+	analysis, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not fetch created analysis")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, analysis)
+}
+
+// AdvanceStep pushes one analysis job forward by exactly one pipeline stage.
+// The frontend calls this on every poll tick while a job is still in
+// progress — see worker.Step for what each stage does.
+func (h *Handler) AdvanceStep(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	h.worker.Step(r.Context(), id)
+
+	analysis, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "analysis not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch analysis")
+		return
+	}
+	writeJSON(w, http.StatusOK, analysis)
 }
 
 func (h *Handler) GetAnalysis(w http.ResponseWriter, r *http.Request) {

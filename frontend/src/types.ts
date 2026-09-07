@@ -118,8 +118,8 @@ export interface Settings {
   configured: boolean
   youtubeApiKeySet: boolean
   youtubeApiKeyPreview?: string
-  anthropicApiKeySet: boolean
-  anthropicApiKeyPreview?: string
+  deepseekApiKeySet: boolean
+  deepseekApiKeyPreview?: string
   aiModel: string
   maxVideos: number
   updatedAt: string
@@ -127,7 +127,7 @@ export interface Settings {
 
 export interface UpdateSettingsRequest {
   youtubeApiKey?: string
-  anthropicApiKey?: string
+  deepseekApiKey?: string
   aiModel?: string
   maxVideos?: number
 }

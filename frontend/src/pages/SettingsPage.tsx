@@ -4,16 +4,15 @@ import { updateSettings } from '../api/client'
 import { useSettingsContext } from '../context/SettingsContext'
 
 const MODEL_OPTIONS = [
-  { value: 'claude-opus-5', label: 'Claude Opus 5 (mạnh nhất, khuyến nghị)' },
-  { value: 'claude-sonnet-5', label: 'Claude Sonnet 5 (cân bằng, rẻ hơn)' },
-  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (nhanh, rẻ nhất)' },
+  { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro (chất lượng cao hơn, khuyến nghị)' },
+  { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash (nhanh hơn, rẻ hơn)' },
 ]
 
 export default function SettingsPage() {
   const { settings, loading, refresh } = useSettingsContext()
   const [youtubeApiKey, setYoutubeApiKey] = useState('')
-  const [anthropicApiKey, setAnthropicApiKey] = useState('')
-  const [aiModel, setAiModel] = useState('claude-opus-5')
+  const [deepseekApiKey, setDeepseekApiKey] = useState('')
+  const [aiModel, setAiModel] = useState('deepseek-v4-pro')
   const [maxVideos, setMaxVideos] = useState(50)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +21,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings) {
-      setAiModel(settings.aiModel || 'claude-opus-5')
+      setAiModel(settings.aiModel || 'deepseek-v4-pro')
       setMaxVideos(settings.maxVideos || 50)
     }
   }, [settings])
@@ -35,13 +34,13 @@ export default function SettingsPage() {
     try {
       const updated = await updateSettings({
         youtubeApiKey: youtubeApiKey || undefined,
-        anthropicApiKey: anthropicApiKey || undefined,
+        deepseekApiKey: deepseekApiKey || undefined,
         aiModel,
         maxVideos,
       })
       await refresh()
       setYoutubeApiKey('')
-      setAnthropicApiKey('')
+      setDeepseekApiKey('')
       setSaved(true)
       if (updated.configured) {
         setTimeout(() => navigate('/'), 800)
@@ -65,7 +64,7 @@ export default function SettingsPage() {
 
       {settings && !settings.configured && (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Bạn cần nhập đủ YouTube API key và Anthropic API key trước khi tạo phân tích.
+          Bạn cần nhập đủ YouTube API key và DeepSeek API key trước khi tạo phân tích.
         </p>
       )}
 
@@ -88,18 +87,18 @@ export default function SettingsPage() {
         </Field>
 
         <Field
-          label="Anthropic API Key"
+          label="DeepSeek API Key"
           hint={
-            settings?.anthropicApiKeySet
-              ? `Đã lưu (${settings.anthropicApiKeyPreview}). Để trống nếu không muốn đổi.`
-              : 'Tạo tại console.anthropic.com.'
+            settings?.deepseekApiKeySet
+              ? `Đã lưu (${settings.deepseekApiKeyPreview}). Để trống nếu không muốn đổi.`
+              : 'Tạo tại platform.deepseek.com (mục API Keys).'
           }
         >
           <input
             type="password"
-            value={anthropicApiKey}
-            onChange={(e) => setAnthropicApiKey(e.target.value)}
-            placeholder={settings?.anthropicApiKeySet ? '••••••••' : 'sk-ant-...'}
+            value={deepseekApiKey}
+            onChange={(e) => setDeepseekApiKey(e.target.value)}
+            placeholder={settings?.deepseekApiKeySet ? '••••••••' : 'sk-...'}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
           />
         </Field>

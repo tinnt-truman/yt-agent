@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getAnalysis } from '../api/client'
+import { stepAnalysis } from '../api/client'
 import type { Analysis, AnalysisResult, StrategyOutput } from '../types'
 import { StatusBadge } from '../components/StatusBadge'
 import { ChannelOverview } from '../components/ChannelOverview'
@@ -23,7 +23,10 @@ export default function AnalysisPage() {
 
     async function poll() {
       try {
-        const data = await getAnalysis(id!)
+        // Also advances the job by one stage if it isn't finished yet — the
+        // backend has no background worker, so this drives the pipeline
+        // forward. It's a safe no-op once the job is done or failed.
+        const data = await stepAnalysis(id!)
         if (cancelled) return
         setAnalysis(data)
         if (ACTIVE_STATUSES.has(data.status)) {

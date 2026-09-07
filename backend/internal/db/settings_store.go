@@ -18,8 +18,8 @@ func NewSettingsStore(db *sql.DB) *SettingsStore {
 func (s *SettingsStore) Get(ctx context.Context) (models.Settings, error) {
 	var out models.Settings
 	err := s.db.QueryRowContext(ctx,
-		`SELECT youtube_api_key, anthropic_api_key, ai_model, max_videos, updated_at FROM settings WHERE id = 1`,
-	).Scan(&out.YouTubeAPIKey, &out.AnthropicAPIKey, &out.AIModel, &out.MaxVideos, &out.UpdatedAt)
+		`SELECT youtube_api_key, deepseek_api_key, ai_model, max_videos, updated_at FROM settings WHERE id = 1`,
+	).Scan(&out.YouTubeAPIKey, &out.DeepSeekAPIKey, &out.AIModel, &out.MaxVideos, &out.UpdatedAt)
 	return out, err
 }
 
@@ -27,10 +27,10 @@ func (s *SettingsStore) Get(ctx context.Context) (models.Settings, error) {
 // pointer means "leave as-is" — in particular, an empty API key field in the
 // UI must never silently wipe out a previously saved key.
 type SettingsPatch struct {
-	YouTubeAPIKey   *string
-	AnthropicAPIKey *string
-	AIModel         *string
-	MaxVideos       *int
+	YouTubeAPIKey  *string
+	DeepSeekAPIKey *string
+	AIModel        *string
+	MaxVideos      *int
 }
 
 func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models.Settings, error) {
@@ -42,8 +42,8 @@ func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models
 	if patch.YouTubeAPIKey != nil {
 		current.YouTubeAPIKey = *patch.YouTubeAPIKey
 	}
-	if patch.AnthropicAPIKey != nil {
-		current.AnthropicAPIKey = *patch.AnthropicAPIKey
+	if patch.DeepSeekAPIKey != nil {
+		current.DeepSeekAPIKey = *patch.DeepSeekAPIKey
 	}
 	if patch.AIModel != nil {
 		current.AIModel = *patch.AIModel
@@ -53,8 +53,8 @@ func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models
 	}
 
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE settings SET youtube_api_key = $1, anthropic_api_key = $2, ai_model = $3, max_videos = $4, updated_at = now() WHERE id = 1`,
-		current.YouTubeAPIKey, current.AnthropicAPIKey, current.AIModel, current.MaxVideos,
+		`UPDATE settings SET youtube_api_key = $1, deepseek_api_key = $2, ai_model = $3, max_videos = $4, updated_at = now() WHERE id = 1`,
+		current.YouTubeAPIKey, current.DeepSeekAPIKey, current.AIModel, current.MaxVideos,
 	)
 	if err != nil {
 		return models.Settings{}, err
@@ -65,7 +65,7 @@ func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models
 // SeedFromEnv fills in empty credential/model fields from environment values
 // on first boot only — it never overwrites a value already saved via the
 // config page.
-func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, anthropicKey, aiModel string, maxVideos int) error {
+func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, deepSeekKey, aiModel string, maxVideos int) error {
 	current, err := s.Get(ctx)
 	if err != nil {
 		return err
@@ -75,8 +75,8 @@ func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, anthropicKe
 	if current.YouTubeAPIKey == "" && youtubeKey != "" {
 		patch.YouTubeAPIKey = &youtubeKey
 	}
-	if current.AnthropicAPIKey == "" && anthropicKey != "" {
-		patch.AnthropicAPIKey = &anthropicKey
+	if current.DeepSeekAPIKey == "" && deepSeekKey != "" {
+		patch.DeepSeekAPIKey = &deepSeekKey
 	}
 	if current.AIModel == "" && aiModel != "" {
 		patch.AIModel = &aiModel
@@ -84,7 +84,7 @@ func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, anthropicKe
 	if current.MaxVideos == 0 && maxVideos != 0 {
 		patch.MaxVideos = &maxVideos
 	}
-	if patch.YouTubeAPIKey == nil && patch.AnthropicAPIKey == nil && patch.AIModel == nil && patch.MaxVideos == nil {
+	if patch.YouTubeAPIKey == nil && patch.DeepSeekAPIKey == nil && patch.AIModel == nil && patch.MaxVideos == nil {
 		return nil
 	}
 

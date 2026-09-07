@@ -13,24 +13,29 @@ import (
 type Config struct {
 	Port        string
 	DatabaseURL string
+	// CORSOrigin restricts Access-Control-Allow-Origin to a single origin
+	// (e.g. the frontend's Vercel URL). Empty means "*" — fine for local dev,
+	// but worth locking down once frontend and backend are deployed separately.
+	CORSOrigin string
 
 	// Seed* values pre-populate the settings table on first boot only, so
 	// existing setups that already export these env vars keep working
 	// without visiting the config page. They are never read again after that.
-	SeedYouTubeAPIKey   string
-	SeedAnthropicAPIKey string
-	SeedAIModel         string
-	SeedMaxVideos       int
+	SeedYouTubeAPIKey  string
+	SeedDeepSeekAPIKey string
+	SeedAIModel        string
+	SeedMaxVideos      int
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:                getEnv("PORT", "8080"),
-		DatabaseURL:         os.Getenv("DATABASE_URL"),
-		SeedYouTubeAPIKey:   os.Getenv("YOUTUBE_API_KEY"),
-		SeedAnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
-		SeedAIModel:         getEnv("AI_MODEL", "claude-opus-5"),
-		SeedMaxVideos:       50,
+		Port:               getEnv("PORT", "8080"),
+		DatabaseURL:        os.Getenv("DATABASE_URL"),
+		CORSOrigin:         os.Getenv("CORS_ORIGIN"),
+		SeedYouTubeAPIKey:  os.Getenv("YOUTUBE_API_KEY"),
+		SeedDeepSeekAPIKey: os.Getenv("DEEPSEEK_API_KEY"),
+		SeedAIModel:        getEnv("AI_MODEL", "deepseek-v4-pro"),
+		SeedMaxVideos:      50,
 	}
 
 	if v := os.Getenv("MAX_VIDEOS"); v != "" {

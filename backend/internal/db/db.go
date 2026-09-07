@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"sort"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -18,6 +19,14 @@ func Connect(ctx context.Context, databaseURL string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+	// Kept low on purpose: on a serverless host each cold start opens its own
+	// pool, so a handful of connections per instance avoids exhausting the
+	// database's (or its pooler's) connection limit under concurrent cold
+	// starts. Harmless on a persistent host too.
+	conn.SetMaxOpenConns(5)
+	conn.SetMaxIdleConns(2)
+	conn.SetConnMaxLifetime(5 * time.Minute)
+
 	if err := conn.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}

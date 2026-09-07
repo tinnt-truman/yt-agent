@@ -17,14 +17,14 @@ func NewSettingsHandler(settings *db.SettingsStore) *SettingsHandler {
 }
 
 type settingsResponse struct {
-	Configured             bool      `json:"configured"`
-	YouTubeAPIKeySet       bool      `json:"youtubeApiKeySet"`
-	YouTubeAPIKeyPreview   string    `json:"youtubeApiKeyPreview,omitempty"`
-	AnthropicAPIKeySet     bool      `json:"anthropicApiKeySet"`
-	AnthropicAPIKeyPreview string    `json:"anthropicApiKeyPreview,omitempty"`
-	AIModel                string    `json:"aiModel"`
-	MaxVideos              int       `json:"maxVideos"`
-	UpdatedAt              time.Time `json:"updatedAt"`
+	Configured            bool      `json:"configured"`
+	YouTubeAPIKeySet      bool      `json:"youtubeApiKeySet"`
+	YouTubeAPIKeyPreview  string    `json:"youtubeApiKeyPreview,omitempty"`
+	DeepSeekAPIKeySet     bool      `json:"deepseekApiKeySet"`
+	DeepSeekAPIKeyPreview string    `json:"deepseekApiKeyPreview,omitempty"`
+	AIModel               string    `json:"aiModel"`
+	MaxVideos             int       `json:"maxVideos"`
+	UpdatedAt             time.Time `json:"updatedAt"`
 }
 
 func maskKey(key string) string {
@@ -51,18 +51,18 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.YouTubeAPIKeySet = true
 		resp.YouTubeAPIKeyPreview = maskKey(s.YouTubeAPIKey)
 	}
-	if s.AnthropicAPIKey != "" {
-		resp.AnthropicAPIKeySet = true
-		resp.AnthropicAPIKeyPreview = maskKey(s.AnthropicAPIKey)
+	if s.DeepSeekAPIKey != "" {
+		resp.DeepSeekAPIKeySet = true
+		resp.DeepSeekAPIKeyPreview = maskKey(s.DeepSeekAPIKey)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 type updateSettingsRequest struct {
-	YouTubeAPIKey   *string `json:"youtubeApiKey"`
-	AnthropicAPIKey *string `json:"anthropicApiKey"`
-	AIModel         *string `json:"aiModel"`
-	MaxVideos       *int    `json:"maxVideos"`
+	YouTubeAPIKey  *string `json:"youtubeApiKey"`
+	DeepSeekAPIKey *string `json:"deepseekApiKey"`
+	AIModel        *string `json:"aiModel"`
+	MaxVideos      *int    `json:"maxVideos"`
 }
 
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -78,8 +78,8 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	if req.YouTubeAPIKey != nil && *req.YouTubeAPIKey != "" {
 		patch.YouTubeAPIKey = req.YouTubeAPIKey
 	}
-	if req.AnthropicAPIKey != nil && *req.AnthropicAPIKey != "" {
-		patch.AnthropicAPIKey = req.AnthropicAPIKey
+	if req.DeepSeekAPIKey != nil && *req.DeepSeekAPIKey != "" {
+		patch.DeepSeekAPIKey = req.DeepSeekAPIKey
 	}
 	if req.AIModel != nil && *req.AIModel != "" {
 		patch.AIModel = req.AIModel

@@ -1,8 +1,10 @@
 package ai
 
-// strategySchema mirrors models.StrategyOutput. Structured-output JSON
-// schemas require additionalProperties:false and a required list on every
-// object (see Anthropic structured outputs docs).
+// strategySchema mirrors models.StrategyOutput as a JSON-Schema-shaped
+// description. DeepSeek's JSON mode has no schema-enforcement parameter, so
+// this is embedded as text in the prompt (see client.go) to tell the model
+// the exact shape to produce; the result is still validated by unmarshalling
+// into models.StrategyOutput after the call.
 var strategySchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{

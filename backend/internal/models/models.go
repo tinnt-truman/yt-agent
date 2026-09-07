@@ -34,16 +34,16 @@ type Analysis struct {
 // Settings holds the app's single row of runtime configuration: API
 // credentials and analysis/AI tunables, editable from the config page.
 type Settings struct {
-	YouTubeAPIKey   string    `json:"-"`
-	AnthropicAPIKey string    `json:"-"`
-	AIModel         string    `json:"aiModel"`
-	MaxVideos       int       `json:"maxVideos"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	YouTubeAPIKey  string    `json:"-"`
+	DeepSeekAPIKey string    `json:"-"`
+	AIModel        string    `json:"aiModel"`
+	MaxVideos      int       `json:"maxVideos"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // IsConfigured reports whether both required API keys have been set.
 func (s Settings) IsConfigured() bool {
-	return s.YouTubeAPIKey != "" && s.AnthropicAPIKey != ""
+	return s.YouTubeAPIKey != "" && s.DeepSeekAPIKey != ""
 }
 
 // ChannelInfo is the basic metadata fetched for a channel.
