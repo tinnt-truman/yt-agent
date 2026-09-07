@@ -1,5 +1,7 @@
 # YT Agent
 
+[![CI](https://github.com/tinnt-truman/yt-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/tinnt-truman/yt-agent/actions/workflows/ci.yml)
+
 Phân tích một kênh/video YouTube, sau đó dùng AI (Claude) để "biến tấu" thành
 chiến lược nội dung cho một kênh mới: định vị, content pillar, ý tưởng video,
 lịch đăng, mẫu tiêu đề, từ khoá SEO, bộ hashtag.
