@@ -96,8 +96,13 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
   chọn `backend/`. Vercel tự nhận diện Go qua `go.mod` + `cmd/server/main.go`.
 - Biến môi trường cần set trong project settings:
   - `DATABASE_URL` = connection string Neon ở bước 1
-  - `CORS_ORIGIN` = URL của frontend sau khi deploy (điền tạm `*` nếu deploy
-    frontend sau, rồi quay lại sửa)
+  - `CORS_ORIGIN` (tuỳ chọn) = danh sách domain frontend được phép gọi API,
+    cách nhau bằng dấu phẩy. Để trống thì cho phép mọi origin — API này
+    không dùng cookie/session nên để trống vẫn an toàn, không bắt buộc phải
+    điền. Một project Vercel có nhiều domain khác nhau (domain chính, domain
+    `*.vercel.app` tự sinh, domain riêng mỗi preview) nên nếu điền, nhớ liệt
+    kê đủ domain bạn sẽ gọi tới, ví dụ:
+    `https://yt-agent-fe.vercel.app,https://yt-agent.example.com`
 - Không cần cấu hình `maxDuration` thủ công: với Fluid Compute (mặc định cho
   project mới), Vercel cho **300s/function** ngay cả ở Hobby — đủ dư cho bước
   gọi DeepSeek. `maxDuration` cũng không cấu hình được qua `functions` trong
@@ -114,8 +119,9 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
   `frontend/`. Vercel tự nhận diện Vite.
 - Biến môi trường: `VITE_API_BASE_URL` = URL project backend ở bước 2 (không
   có dấu `/` ở cuối), ví dụ `https://yt-agent-backend.vercel.app`.
-- Deploy xong, quay lại project backend, cập nhật `CORS_ORIGIN` bằng URL
-  frontend vừa có rồi redeploy backend.
+- Nếu backend đang để `CORS_ORIGIN` trống (cho mọi origin) thì không cần làm
+  gì thêm. Nếu muốn siết lại, quay lại project backend, thêm domain frontend
+  vừa có vào `CORS_ORIGIN` rồi redeploy backend.
 
 ## API
 

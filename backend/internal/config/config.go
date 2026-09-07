@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds boot-time settings that must come from the environment
@@ -13,10 +14,11 @@ import (
 type Config struct {
 	Port        string
 	DatabaseURL string
-	// CORSOrigin restricts Access-Control-Allow-Origin to a single origin
-	// (e.g. the frontend's Vercel URL). Empty means "*" — fine for local dev,
-	// but worth locking down once frontend and backend are deployed separately.
-	CORSOrigin string
+	// CORSOrigins restricts Access-Control-Allow-Origin to a fixed set of
+	// origins (e.g. the frontend's Vercel URL(s)). Empty means "allow any
+	// origin" — fine for local dev, and also a reasonable default in
+	// production here since the API has no cookie/session auth to protect.
+	CORSOrigins []string
 
 	// Seed* values pre-populate the settings table on first boot only, so
 	// existing setups that already export these env vars keep working
@@ -31,7 +33,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:               getEnv("PORT", "8080"),
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		CORSOrigin:         os.Getenv("CORS_ORIGIN"),
+		CORSOrigins:        parseCSV(os.Getenv("CORS_ORIGIN")),
 		SeedYouTubeAPIKey:  os.Getenv("YOUTUBE_API_KEY"),
 		SeedDeepSeekAPIKey: os.Getenv("DEEPSEEK_API_KEY"),
 		SeedAIModel:        getEnv("AI_MODEL", "deepseek-v4-pro"),
@@ -56,4 +58,21 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// parseCSV splits a comma-separated env var into trimmed, non-empty values.
+// Lets CORS_ORIGIN carry more than one allowed origin, e.g. both a custom
+// domain and the *.vercel.app project domain.
+func parseCSV(v string) []string {
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

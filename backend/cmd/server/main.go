@@ -34,7 +34,7 @@ func main() {
 	w := worker.New(store, settingsStore)
 	handler := api.NewHandler(store, settingsStore, w)
 	settingsHandler := api.NewSettingsHandler(settingsStore)
-	router := api.NewRouter(handler, settingsHandler, cfg.CORSOrigin)
+	router := api.NewRouter(handler, settingsHandler, cfg.CORSOrigins)
 
 	log.Printf("listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
