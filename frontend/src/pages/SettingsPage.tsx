@@ -82,7 +82,7 @@ export default function SettingsPage() {
             value={youtubeApiKey}
             onChange={(e) => setYoutubeApiKey(e.target.value)}
             placeholder={settings?.youtubeApiKeySet ? '••••••••' : 'AIza...'}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
           />
         </Field>
 
@@ -99,7 +99,7 @@ export default function SettingsPage() {
             value={deepseekApiKey}
             onChange={(e) => setDeepseekApiKey(e.target.value)}
             placeholder={settings?.deepseekApiKeySet ? '••••••••' : 'sk-...'}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
           />
         </Field>
 
@@ -107,7 +107,7 @@ export default function SettingsPage() {
           <select
             value={aiModel}
             onChange={(e) => setAiModel(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
           >
             {MODEL_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -124,7 +124,7 @@ export default function SettingsPage() {
             max={200}
             value={maxVideos}
             onChange={(e) => setMaxVideos(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
           />
         </Field>
 

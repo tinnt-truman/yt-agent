@@ -165,6 +165,54 @@ func (c *Client) GenerateTrendingInsight(ctx context.Context, report models.Tren
 	return &out, nil
 }
 
+const videoPromptSystemPrompt = `Bạn là chuyên gia viết prompt cho công cụ AI tạo video từ văn bản (text-to-video) như Kling, Runway, Sora. Bạn sẽ nhận thông tin (tiêu đề, mô tả, tag) của MỘT video YouTube tham khảo. Nhiệm vụ: viết một prompt MỚI để tạo ra một video khác, cùng chủ đề/không khí với video tham khảo nhưng KHÔNG sao chép cảnh quay hay chi tiết cụ thể của video gốc — chỉ lấy cảm hứng về chủ đề, không khí, phong cách hình ảnh.
+
+Trường "prompt" và "negativePrompt" PHẢI viết bằng tiếng Anh (mô hình text-to-video hiện tại hiểu và bám sát prompt tiếng Anh tốt hơn hẳn tiếng Việt). Prompt cần mô tả cụ thể: chủ thể, bối cảnh, ánh sáng, chuyển động máy quay, phong cách hình ảnh — đủ chi tiết để AI tạo ra một cảnh quay rõ ràng, nhưng không quá 80 từ.
+
+Trường "style" và "durationHint" viết bằng tiếng Việt.
+
+Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
+
+{
+  "prompt": "string, tiếng Anh, mô tả cảnh quay chi tiết cho AI text-to-video",
+  "negativePrompt": "string, tiếng Anh, những gì cần tránh (vd: text, watermark, blurry, distorted faces)",
+  "style": "string, tiếng Việt, phong cách hình ảnh gợi ý (vd: 'điện ảnh, tông màu ấm, quay chậm')",
+  "durationHint": "string, tiếng Việt, độ dài clip gợi ý (vd: '5-10 giây mỗi cảnh')"
+}`
+
+// GenerateVideoPrompt writes a text-to-video generation prompt inspired by
+// one reference video's topic/mood — not a reproduction of it. Standalone
+// and on-demand (like GenerateTrendingInsight): the caller already has the
+// video's metadata (from an analysis result or a trending report), so this
+// needs no extra YouTube API call.
+func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPromptRequest) (*models.VideoPrompt, error) {
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal video: %w", err)
+	}
+
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: videoPromptSystemPrompt},
+			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
+		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
+		MaxTokens:      1000,
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.VideoPrompt
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse video prompt JSON: %w", err)
+	}
+	return &out, nil
+}
+
 func (c *Client) chat(ctx context.Context, reqBody chatRequest) (string, error) {
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

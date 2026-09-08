@@ -267,3 +267,25 @@ type ChannelAnalytics struct {
 	EstimatedRevenueUSD     *float64              `json:"estimatedRevenueUsd,omitempty"`
 	RevenueNote             string                `json:"revenueNote,omitempty"`
 }
+
+// VideoPromptRequest carries the metadata of one existing video (from an
+// analysis result or a trending report — both cover the same fields) used
+// as the reference for generating a new text-to-video prompt.
+type VideoPromptRequest struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// VideoPrompt is an AI-generated prompt for text-to-video tools (Kling,
+// Runway, Sora, ...) meant to produce a new video on the same topic/theme as
+// the reference video — not a copy of it.
+type VideoPrompt struct {
+	// Prompt is written in English on purpose: current text-to-video models
+	// are trained overwhelmingly on English captions and follow English
+	// prompts more reliably than Vietnamese ones.
+	Prompt         string `json:"prompt"`
+	NegativePrompt string `json:"negativePrompt,omitempty"`
+	Style          string `json:"style"`
+	DurationHint   string `json:"durationHint"`
+}

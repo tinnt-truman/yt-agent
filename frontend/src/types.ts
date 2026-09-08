@@ -224,3 +224,16 @@ export interface ChannelAnalytics {
   estimatedRevenueUsd?: number
   revenueNote?: string
 }
+
+export interface VideoPromptRequest {
+  title: string
+  description?: string
+  tags?: string[]
+}
+
+export interface VideoPrompt {
+  prompt: string
+  negativePrompt?: string
+  style: string
+  durationHint: string
+}

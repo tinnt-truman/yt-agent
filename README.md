@@ -172,6 +172,10 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
 - Nếu backend đang để `CORS_ORIGIN` trống (cho mọi origin) thì không cần làm
   gì thêm. Nếu muốn siết lại, quay lại project backend, thêm domain frontend
   vừa có vào `CORS_ORIGIN` rồi redeploy backend.
+- `frontend/vercel.json` đã cấu hình rewrite toàn bộ path về `index.html` —
+  cần thiết vì đây là SPA dùng React Router: reload thẳng vào một route như
+  `/trending` sẽ bị 404 trên static hosting nếu thiếu file này (client-side
+  routing chỉ hoạt động sau khi `index.html` đã tải).
 
 ## API
 
@@ -192,6 +196,7 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
 | GET    | `/api/channels`            | Danh sách kênh đã kết nối qua Google OAuth |
 | DELETE | `/api/channels/:id`        | Ngắt kết nối 1 kênh (thu hồi token ở Google + xoá khỏi DB) |
 | GET    | `/api/channels/:id/analytics` | Snapshot YouTube Analytics riêng tư 28 ngày gần nhất: lượt xem, giờ xem, nguồn traffic, video xem nhiều nhất, doanh thu ước tính, trạng thái kiếm tiền |
+| POST   | `/api/videos/prompt`       | Body `{ title, description?, tags? }` (lấy từ 1 video trong kết quả phân tích/trending) → DeepSeek viết prompt tiếng Anh cho công cụ AI tạo video (Kling/Runway/Sora), lấy cảm hứng cùng chủ đề chứ không sao chép |
 
 Tất cả endpoint trên (trừ `/api/auth/login`, `/api/oauth/google/callback`,
 `/healthz`) yêu cầu header `Authorization: Bearer <APP_PASSWORD>`.

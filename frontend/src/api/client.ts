@@ -7,6 +7,8 @@ import type {
   TrendingReport,
   UpdateSettingsRequest,
   VideoCategory,
+  VideoPrompt,
+  VideoPromptRequest,
 } from '../types'
 import { getStoredPassword, notifyUnauthorized } from './auth-token'
 
@@ -156,5 +158,14 @@ export async function disconnectChannel(id: string): Promise<void> {
 
 export async function getChannelAnalytics(id: string): Promise<ChannelAnalytics> {
   const res = await fetch(`${API_BASE}/api/channels/${id}/analytics`, { headers: authHeaders() })
+  return handle(res)
+}
+
+export async function generateVideoPrompt(req: VideoPromptRequest): Promise<VideoPrompt> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(req),
+  })
   return handle(res)
 }

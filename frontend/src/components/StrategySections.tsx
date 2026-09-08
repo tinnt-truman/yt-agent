@@ -1,4 +1,5 @@
 import type { StrategyOutput } from '../types'
+import { CopyButton } from './CopyButton'
 
 const PILLAR_COLORS = ['bg-indigo-600', 'bg-violet-500', 'bg-amber-400', 'bg-slate-300', 'bg-emerald-400']
 const PILLAR_DOT_COLORS = ['bg-indigo-600', 'bg-violet-500', 'bg-amber-400', 'bg-slate-300', 'bg-emerald-400']
@@ -53,12 +54,13 @@ export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
             <p className="text-xs font-semibold text-indigo-700">Gợi ý tên kênh</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {strategy.positioning.channelNameIdeas.map((name) => (
-                <span
+                <CopyButton
                   key={name}
-                  className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-medium text-indigo-700"
-                >
-                  {name}
-                </span>
+                  text={name}
+                  label={name}
+                  bare
+                  className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-700 hover:bg-indigo-50"
+                />
               ))}
             </div>
           </div>
@@ -111,9 +113,12 @@ export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
                 </span>
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{idea.description}</p>
-              <p className="mt-2 text-[11px] text-slate-400">
-                Hook: {idea.hook} · {idea.estimatedLength}
-              </p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-400">
+                  Hook: {idea.hook} · {idea.estimatedLength}
+                </p>
+                <CopyButton text={idea.title} label="Copy tiêu đề" />
+              </div>
             </div>
           ))}
         </div>
@@ -160,15 +165,23 @@ export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-5">
           <h2 className="text-base font-semibold text-slate-900">Mẫu tiêu đề</h2>
-          <ol className="mt-3 list-inside list-decimal space-y-2 text-sm leading-relaxed text-slate-700">
+          <ul className="mt-3 space-y-2">
             {strategy.titleTemplates.map((t, i) => (
-              <li key={i}>{t}</li>
+              <li key={i} className="flex items-start justify-between gap-2">
+                <span className="text-sm leading-relaxed text-slate-700">
+                  {i + 1}. {t}
+                </span>
+                <CopyButton text={t} className="shrink-0" />
+              </li>
             ))}
-          </ol>
+          </ul>
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="text-base font-semibold text-slate-900">Từ khoá SEO</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-slate-900">Từ khoá SEO</h2>
+            <CopyButton text={strategy.seoKeywords.join(', ')} label="Copy tất cả" />
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {strategy.seoKeywords.map((k) => (
               <span key={k} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -185,7 +198,10 @@ export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {strategy.hashtagSets.map((set) => (
             <div key={set.theme} className="rounded-md border border-slate-100 p-3">
-              <p className="text-xs font-semibold text-slate-900">{set.theme}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-900">{set.theme}</p>
+                <CopyButton text={set.hashtags.join(' ')} />
+              </div>
               <p className="mt-1.5 text-sm leading-relaxed text-indigo-600">{set.hashtags.join(' ')}</p>
             </div>
           ))}

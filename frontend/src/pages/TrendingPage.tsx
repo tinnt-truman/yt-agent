@@ -6,8 +6,9 @@ import {
   getTrendingInsight,
   getVideoCategories,
 } from '../api/client'
-import type { TrendingInsight, TrendingReport, VideoCategory } from '../types'
+import type { TrendingInsight, TrendingReport, TrendingVideo, VideoCategory } from '../types'
 import { formatCompact, formatDate } from '../lib/format'
+import { VideoPromptModal } from '../components/VideoPromptModal'
 
 const REGIONS = [
   { value: 'VN', label: 'Việt Nam' },
@@ -33,6 +34,7 @@ export default function TrendingPage() {
   const [insightError, setInsightError] = useState<string | null>(null)
 
   const [analyzingChannelId, setAnalyzingChannelId] = useState<string | null>(null)
+  const [promptVideo, setPromptVideo] = useState<TrendingVideo | null>(null)
   const navigate = useNavigate()
 
   // Category IDs/availability vary by region, so the list is refetched
@@ -93,7 +95,7 @@ export default function TrendingPage() {
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
           >
             {REGIONS.map((r) => (
               <option key={r.value} value={r.value}>
@@ -104,7 +106,7 @@ export default function TrendingPage() {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
           >
             <option value="">Tất cả chủ đề</option>
             {categories.map((c) => (
@@ -183,25 +185,34 @@ export default function TrendingPage() {
 
                 <div className="mt-3 flex gap-3 overflow-x-auto">
                   {ch.videos.map((v) => (
-                    <a
-                      key={v.id}
-                      href={`https://www.youtube.com/watch?v=${v.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0"
-                    >
-                      {v.thumbnail && (
-                        <img src={v.thumbnail} alt={v.title} className="h-20 w-36 rounded object-cover" />
-                      )}
-                      <p className="mt-1 w-36 truncate text-xs text-slate-600">{v.title}</p>
-                      <p className="text-xs text-slate-400">{formatCompact(v.viewCount)} views</p>
-                    </a>
+                    <div key={v.id} className="w-36 shrink-0">
+                      <a href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noreferrer">
+                        {v.thumbnail && (
+                          <img src={v.thumbnail} alt={v.title} className="h-20 w-36 rounded object-cover" />
+                        )}
+                        <p className="mt-1 w-36 truncate text-xs text-slate-600">{v.title}</p>
+                        <p className="text-xs text-slate-400">{formatCompact(v.viewCount)} views</p>
+                      </a>
+                      <button
+                        onClick={() => setPromptVideo(v)}
+                        className="mt-1 text-[11px] font-medium text-violet-700 hover:text-violet-900"
+                      >
+                        ✦ Tạo prompt AI video
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
             ))}
           </div>
         </>
+      )}
+
+      {promptVideo && (
+        <VideoPromptModal
+          video={{ title: promptVideo.title }}
+          onClose={() => setPromptVideo(null)}
+        />
       )}
     </div>
   )
