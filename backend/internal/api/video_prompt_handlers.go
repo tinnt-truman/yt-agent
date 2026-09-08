@@ -52,3 +52,39 @@ func (h *VideoPromptHandler) GeneratePrompt(w http.ResponseWriter, r *http.Reque
 	}
 	writeJSON(w, http.StatusOK, prompt)
 }
+
+// GeneratePromptSeries turns one video's metadata into an original
+// multi-episode story with a text-to-video prompt per episode (see
+// models.VideoPromptSeries) — for a longer, serialized story told across
+// several separately-generated videos, unlike GeneratePrompt's single short
+// clip.
+func (h *VideoPromptHandler) GeneratePromptSeries(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.settings.Get(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load settings")
+		return
+	}
+	if settings.DeepSeekAPIKey == "" {
+		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình DeepSeek API key — vào trang Cài đặt trước")
+		return
+	}
+
+	var req models.VideoPromptSeriesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Title = strings.TrimSpace(req.Title)
+	if req.Title == "" {
+		writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+
+	aiClient := ai.NewClient(settings.DeepSeekAPIKey, settings.AIModel)
+	series, err := aiClient.GenerateVideoPromptSeries(r.Context(), req)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, series)
+}

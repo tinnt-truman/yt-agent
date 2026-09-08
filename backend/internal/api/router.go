@@ -33,6 +33,7 @@ func NewRouter(
 	protected.HandleFunc("DELETE /api/channels/{id}", ch.Disconnect)
 	protected.HandleFunc("GET /api/channels/{id}/analytics", ch.GetAnalytics)
 	protected.HandleFunc("POST /api/videos/prompt", vph.GeneratePrompt)
+	protected.HandleFunc("POST /api/videos/prompt-series", vph.GeneratePromptSeries)
 	protected.HandleFunc("POST /api/scripts", sch.CreateScript)
 	protected.HandleFunc("GET /api/scripts", sch.ListScripts)
 	protected.HandleFunc("GET /api/scripts/{id}", sch.GetScript)

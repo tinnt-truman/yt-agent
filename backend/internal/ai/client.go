@@ -213,6 +213,77 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 	return &out, nil
 }
 
+const videoPromptSeriesSystemPromptTemplate = `Bạn là biên kịch kiêm đạo diễn cho phim ngắn nhiều tập tạo bằng AI text-to-video (Kling, Google Flow, Runway, Sora...). Bạn sẽ nhận thông tin (tiêu đề, mô tả, tag) của MỘT video YouTube tham khảo. Nhiệm vụ: sáng tác một câu chuyện MỚI, có cốt truyện rõ ràng, chia thành đúng %d tập — LẤY CẢM HỨNG từ chủ đề/không khí của video tham khảo nhưng KHÔNG sao chép cốt truyện, nhân vật hay chi tiết cụ thể của video/bộ phim gốc.
+
+Các công cụ AI tạo video hiện tại chỉ tạo được clip ngắn mỗi lần (vài giây đến khoảng một phút), nên câu chuyện dài được kể bằng cách tạo NHIỀU video riêng biệt (Tập 1, Tập 2, ...), mỗi tập một prompt riêng — không phải một prompt duy nhất cho cả bộ phim.
+
+Hãy xây dựng 2-4 NHÂN VẬT xuyên suốt câu chuyện (nhân vật chính, phản diện, phụ nếu cần), mỗi nhân vật gồm:
+- "name": tên nhân vật
+- "role": loại nhân vật (vd: "Nhân vật chính diện", "Phản diện", "Nhân vật phụ")
+- "appearance": mô tả ngoại hình/trang phục bằng TIẾNG ANH, đủ chi tiết để dán vào prompt text-to-video ở mỗi tập nhằm giữ hình ảnh nhân vật nhất quán giữa các tập
+- "coreTags": 3-5 từ khoá ngắn gọn (tiếng Việt) mô tả cốt lõi nhân vật (vd: "kiêu ngạo", "trung thành", "bí ẩn")
+- "personalInfo": thông tin cá nhân ngắn gọn (tiếng Việt): tuổi, thân phận, nghề nghiệp/vai trò trong câu chuyện
+- "personality": đặc điểm tính cách (tiếng Việt, 1-2 câu)
+
+Mỗi tập cần: tiêu đề ngắn, tóm tắt cốt truyện của tập đó (tiếng Việt, 1-2 câu, nối tiếp mạch truyện xuyên suốt), và một prompt text-to-video (tiếng Anh, mô tả cụ thể chủ thể/hành động/bối cảnh/ánh sáng/chuyển động máy quay cho cảnh quan trọng nhất của tập đó, không quá 80 từ — nhắc tên/ngoại hình nhân vật xuất hiện trong cảnh để khớp với "appearance" đã mô tả).
+
+Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
+
+{
+  "synopsis": "string, tiếng Việt, tóm tắt cốt truyện tổng thể xuyên suốt các tập",
+  "characters": [
+    {"name": "string", "role": "string", "appearance": "string (tiếng Anh)", "coreTags": ["string", "..."], "personalInfo": "string", "personality": "string"}
+  ],
+  "style": "string, tiếng Việt, phong cách hình ảnh chung cho cả series",
+  "durationHint": "string, tiếng Việt, độ dài gợi ý cho mỗi tập",
+  "episodes": [
+    {"episodeNumber": 1, "title": "string", "plotSummary": "string", "prompt": "string", "negativePrompt": "string"}
+  ]
+}`
+
+// GenerateVideoPromptSeries writes an ORIGINAL multi-episode story inspired
+// by one reference video's topic/mood, broken into per-episode text-to-video
+// prompts (see VideoPromptSeries) — unlike GenerateVideoPrompt, which writes
+// a single prompt for one short clip, this is for a longer serialized story
+// told across several separately-generated episode videos.
+func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.VideoPromptSeriesRequest) (*models.VideoPromptSeries, error) {
+	episodeCount := req.EpisodeCount
+	if episodeCount <= 0 {
+		episodeCount = 5
+	}
+	if episodeCount > 10 {
+		episodeCount = 10
+	}
+	req.EpisodeCount = episodeCount
+
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal video series request: %w", err)
+	}
+
+	systemPrompt := fmt.Sprintf(videoPromptSeriesSystemPromptTemplate, episodeCount)
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
+		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
+		MaxTokens:      1800 + episodeCount*350,
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.VideoPromptSeries
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse video prompt series JSON: %w", err)
+	}
+	return &out, nil
+}
+
 const scriptSystemPrompt = `Bạn là biên kịch video YouTube chuyên nghiệp. Bạn sẽ nhận một ý tưởng nội dung (tiêu đề, mô tả, hook) và định dạng thời lượng mong muốn. Nhiệm vụ: viết một kịch bản chi tiết theo từng cảnh cho video đó.
 
 Nếu durationFormat là "long" (video dài 5-10 phút): viết khoảng 8-12 cảnh, mỗi cảnh có timecode dạng khoảng thời gian (vd "0:00-0:30").

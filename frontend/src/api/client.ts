@@ -11,6 +11,8 @@ import type {
   VideoCategory,
   VideoPrompt,
   VideoPromptRequest,
+  VideoPromptSeries,
+  VideoPromptSeriesRequest,
 } from '../types'
 import { getStoredPassword, notifyUnauthorized } from './auth-token'
 
@@ -173,6 +175,22 @@ export async function getChannelAnalytics(id: string): Promise<ChannelAnalytics>
 
 export async function generateVideoPrompt(req: VideoPromptRequest): Promise<VideoPrompt> {
   const res = await fetch(`${API_BASE}/api/videos/prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(req),
+  })
+  return handle(res)
+}
+
+// generateVideoPromptSeries writes an original multi-episode story with a
+// text-to-video prompt per episode — for a longer serialized story told
+// across several separately-generated videos, unlike generateVideoPrompt's
+// single short clip (still used internally by the script modal's "open
+// Kling/Google Flow" action, which only needs one clip-length prompt).
+export async function generateVideoPromptSeries(
+  req: VideoPromptSeriesRequest,
+): Promise<VideoPromptSeries> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(req),

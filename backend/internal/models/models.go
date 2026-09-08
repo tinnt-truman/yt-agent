@@ -290,6 +290,55 @@ type VideoPrompt struct {
 	DurationHint   string `json:"durationHint"`
 }
 
+// VideoPromptSeriesRequest carries the metadata of one existing video plus
+// how many episodes to break the new, original story into.
+type VideoPromptSeriesRequest struct {
+	Title        string   `json:"title"`
+	Description  string   `json:"description,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+	EpisodeCount int      `json:"episodeCount,omitempty"`
+}
+
+// VideoPromptEpisode is one episode's text-to-video prompt within a
+// multi-episode story. Each episode is meant to become its own
+// separately-generated, separately-uploaded video (Tập 1, Tập 2, ...) —
+// current text-to-video tools only produce short clips per call, so a
+// longer serialized story is told across several of them rather than one.
+type VideoPromptEpisode struct {
+	EpisodeNumber  int    `json:"episodeNumber"`
+	Title          string `json:"title"`
+	PlotSummary    string `json:"plotSummary"`
+	Prompt         string `json:"prompt"`
+	NegativePrompt string `json:"negativePrompt,omitempty"`
+}
+
+// Character is one recurring character in a multi-episode story. Appearance
+// is in English and detailed enough to paste into a text-to-video prompt at
+// each episode so the character stays visually consistent across
+// separately-generated clips; the rest are narrative attributes (in
+// Vietnamese) to keep characterization consistent too.
+type Character struct {
+	Name         string   `json:"name"`
+	Role         string   `json:"role"` // vd: "Nhân vật chính diện", "Phản diện", "Nhân vật phụ"
+	Appearance   string   `json:"appearance"`
+	CoreTags     []string `json:"coreTags"`
+	PersonalInfo string   `json:"personalInfo"`
+	Personality  string   `json:"personality"`
+}
+
+// VideoPromptSeries is an AI-generated ORIGINAL multi-episode story arc —
+// inspired by, not a reproduction of, the reference video's topic/mood —
+// with a cast of recurring Characters so each separately-generated episode
+// clip stays visually and narratively consistent, plus one text-to-video
+// prompt per episode.
+type VideoPromptSeries struct {
+	Synopsis     string               `json:"synopsis"`
+	Characters   []Character          `json:"characters"`
+	Style        string               `json:"style"`
+	DurationHint string               `json:"durationHint"`
+	Episodes     []VideoPromptEpisode `json:"episodes"`
+}
+
 // ScriptRequest carries one content idea (from a generated strategy) used as
 // the basis for a scene-by-scene video script.
 type ScriptRequest struct {

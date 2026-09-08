@@ -274,3 +274,35 @@ export interface VideoPrompt {
   style: string
   durationHint: string
 }
+
+export interface VideoPromptSeriesRequest {
+  title: string
+  description?: string
+  tags?: string[]
+  episodeCount?: number
+}
+
+export interface VideoPromptEpisode {
+  episodeNumber: number
+  title: string
+  plotSummary: string
+  prompt: string
+  negativePrompt?: string
+}
+
+export interface Character {
+  name: string
+  role: string
+  appearance: string
+  coreTags: string[]
+  personalInfo: string
+  personality: string
+}
+
+export interface VideoPromptSeries {
+  synopsis: string
+  characters: Character[]
+  style: string
+  durationHint: string
+  episodes: VideoPromptEpisode[]
+}
