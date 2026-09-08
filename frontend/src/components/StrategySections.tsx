@@ -1,5 +1,7 @@
-import type { StrategyOutput } from '../types'
+import { useState } from 'react'
+import type { ContentIdea, StrategyOutput } from '../types'
 import { CopyButton } from './CopyButton'
+import { ScriptModal } from './ScriptModal'
 
 const PILLAR_COLORS = ['bg-indigo-600', 'bg-violet-500', 'bg-amber-400', 'bg-slate-300', 'bg-emerald-400']
 const PILLAR_DOT_COLORS = ['bg-indigo-600', 'bg-violet-500', 'bg-amber-400', 'bg-slate-300', 'bg-emerald-400']
@@ -24,6 +26,7 @@ function normalize(s: string): string {
 
 export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
   const bestDaysNormalized = strategy.postingSchedule.bestDays.map(normalize)
+  const [scriptIdea, setScriptIdea] = useState<ContentIdea | null>(null)
 
   return (
     <div className="space-y-4">
@@ -113,10 +116,16 @@ export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
                 </span>
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{idea.description}</p>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] text-slate-400">
-                  Hook: {idea.hook} · {idea.estimatedLength}
-                </p>
+              <p className="mt-2 text-[11px] text-slate-400">
+                Hook: {idea.hook} · {idea.estimatedLength}
+              </p>
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setScriptIdea(idea)}
+                  className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 transition hover:bg-indigo-100"
+                >
+                  Tạo kịch bản
+                </button>
                 <CopyButton text={idea.title} label="Copy tiêu đề" />
               </div>
             </div>
@@ -262,6 +271,8 @@ export function StrategySections({ strategy }: { strategy: StrategyOutput }) {
           </div>
         </section>
       )}
+
+      {scriptIdea && <ScriptModal idea={scriptIdea} onClose={() => setScriptIdea(null)} />}
     </div>
   )
 }

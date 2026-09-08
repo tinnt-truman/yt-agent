@@ -213,6 +213,56 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 	return &out, nil
 }
 
+const scriptSystemPrompt = `Bạn là biên kịch video YouTube chuyên nghiệp. Bạn sẽ nhận một ý tưởng nội dung (tiêu đề, mô tả, hook) và định dạng thời lượng mong muốn. Nhiệm vụ: viết một kịch bản chi tiết theo từng cảnh cho video đó.
+
+Nếu durationFormat là "long" (video dài 5-10 phút): viết khoảng 8-12 cảnh, mỗi cảnh có timecode dạng khoảng thời gian (vd "0:00-0:30").
+Nếu durationFormat là "short" (Short 60 giây): viết khoảng 4-6 cảnh ngắn, mỗi cảnh có timecode dạng khoảng thời gian trong 60 giây (vd "0-8s").
+
+Mỗi cảnh gồm: mô tả hình ảnh/hành động cụ thể (visual) và lời thoại/voice-over gợi ý (voiceover, có thể để trống nếu cảnh chỉ có hình ảnh). Viết bằng tiếng Việt, giọng văn tự nhiên, phù hợp để người dùng đọc trực tiếp hoặc lồng tiếng.
+
+Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
+
+{
+  "hook": "string, câu mở đầu gây chú ý trong 3-5 giây đầu",
+  "scenes": [
+    {"timecode": "string", "visual": "string", "voiceover": "string"}
+  ],
+  "callToAction": "string, lời kêu gọi hành động ở cuối video (like, subscribe, comment, ...)",
+  "durationFormat": "string, giữ nguyên giá trị durationFormat đã nhận"
+}`
+
+// GenerateScript writes a scene-by-scene video script for one content idea,
+// tailored to a long-form (5-10 minute) or Short (60 second) duration.
+// Standalone and on-demand, like GenerateVideoPrompt — the caller already
+// has the idea's title/description/hook from a generated strategy.
+func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (*models.Script, error) {
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal script request: %w", err)
+	}
+
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: scriptSystemPrompt},
+			{Role: "user", Content: fmt.Sprintf("Ý tưởng nội dung (JSON):\n%s", string(reqJSON))},
+		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
+		MaxTokens:      3000,
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.Script
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse script JSON: %w", err)
+	}
+	return &out, nil
+}
+
 func (c *Client) chat(ctx context.Context, reqBody chatRequest) (string, error) {
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

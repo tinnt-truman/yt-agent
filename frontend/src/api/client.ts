@@ -2,6 +2,8 @@ import type {
   Analysis,
   ChannelAnalytics,
   ConnectedChannel,
+  Script,
+  ScriptRequest,
   Settings,
   TrendingInsight,
   TrendingReport,
@@ -163,6 +165,15 @@ export async function getChannelAnalytics(id: string): Promise<ChannelAnalytics>
 
 export async function generateVideoPrompt(req: VideoPromptRequest): Promise<VideoPrompt> {
   const res = await fetch(`${API_BASE}/api/videos/prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(req),
+  })
+  return handle(res)
+}
+
+export async function generateScript(req: ScriptRequest): Promise<Script> {
+  const res = await fetch(`${API_BASE}/api/scripts/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(req),

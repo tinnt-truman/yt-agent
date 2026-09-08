@@ -39,8 +39,9 @@ func main() {
 	oauthHandler := api.NewOAuthHandler(cfg, connectedChannelStore)
 	channelsHandler := api.NewChannelsHandler(cfg, connectedChannelStore, settingsStore)
 	videoPromptHandler := api.NewVideoPromptHandler(settingsStore)
+	scriptHandler := api.NewScriptHandler(settingsStore)
 	authHandler := api.NewAuthHandler(cfg.AppPassword)
-	router := api.NewRouter(handler, settingsHandler, trendingHandler, oauthHandler, channelsHandler, videoPromptHandler, authHandler, cfg.CORSOrigins, cfg.AppPassword)
+	router := api.NewRouter(handler, settingsHandler, trendingHandler, oauthHandler, channelsHandler, videoPromptHandler, scriptHandler, authHandler, cfg.CORSOrigins, cfg.AppPassword)
 
 	if cfg.AppPassword == "" {
 		log.Println("warning: APP_PASSWORD is not set — the API is open to anyone who can reach it")

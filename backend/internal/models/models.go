@@ -289,3 +289,28 @@ type VideoPrompt struct {
 	Style          string `json:"style"`
 	DurationHint   string `json:"durationHint"`
 }
+
+// ScriptRequest carries one content idea (from a generated strategy) used as
+// the basis for a scene-by-scene video script.
+type ScriptRequest struct {
+	Title          string `json:"title"`
+	Description    string `json:"description,omitempty"`
+	Hook           string `json:"hook,omitempty"`
+	DurationFormat string `json:"durationFormat"` // "long" (5-10 phút) or "short" (60 giây)
+}
+
+// ScriptScene is one scene of a generated video script.
+type ScriptScene struct {
+	Timecode  string `json:"timecode"`
+	Visual    string `json:"visual"`
+	Voiceover string `json:"voiceover,omitempty"`
+}
+
+// Script is an AI-generated scene-by-scene script for producing one video —
+// either a long-form video (5-10 minutes) or a Short (60 seconds).
+type Script struct {
+	Hook           string        `json:"hook"`
+	Scenes         []ScriptScene `json:"scenes"`
+	CallToAction   string        `json:"callToAction"`
+	DurationFormat string        `json:"durationFormat"`
+}

@@ -9,6 +9,7 @@ func NewRouter(
 	oh *OAuthHandler,
 	ch *ChannelsHandler,
 	vph *VideoPromptHandler,
+	sch *ScriptHandler,
 	ah *AuthHandler,
 	corsOrigins []string,
 	appPassword string,
@@ -31,6 +32,7 @@ func NewRouter(
 	protected.HandleFunc("DELETE /api/channels/{id}", ch.Disconnect)
 	protected.HandleFunc("GET /api/channels/{id}/analytics", ch.GetAnalytics)
 	protected.HandleFunc("POST /api/videos/prompt", vph.GeneratePrompt)
+	protected.HandleFunc("POST /api/scripts/generate", sch.GenerateScript)
 
 	mux := http.NewServeMux()
 	// Registered directly on the outer mux (not under requireAuth): login

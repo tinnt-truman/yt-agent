@@ -114,6 +114,28 @@ export interface HashtagSet {
   hashtags: string[]
 }
 
+export type ScriptDurationFormat = 'long' | 'short'
+
+export interface ScriptRequest {
+  title: string
+  description?: string
+  hook?: string
+  durationFormat: ScriptDurationFormat
+}
+
+export interface ScriptScene {
+  timecode: string
+  visual: string
+  voiceover?: string
+}
+
+export interface Script {
+  hook: string
+  scenes: ScriptScene[]
+  callToAction: string
+  durationFormat: ScriptDurationFormat
+}
+
 export interface Settings {
   configured: boolean
   youtubeApiKeySet: boolean
