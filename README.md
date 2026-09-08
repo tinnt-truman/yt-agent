@@ -8,6 +8,8 @@ video, lịch đăng, mẫu tiêu đề, từ khoá SEO, bộ hashtag.
 
 - **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API)
 - **Frontend**: React + TypeScript + Vite + Tailwind
+- **Auth**: một mật khẩu chung (`APP_PASSWORD`) bảo vệ toàn bộ API — xem
+  phần [Deploy lên Vercel](#deploy-lên-vercel)
 
 ## Kiến trúc
 
@@ -77,6 +79,43 @@ Key được lưu trong bảng `settings` của Postgres (không mã hoá) — p
 dùng cá nhân/local; nếu deploy công khai, cần thêm lớp xác thực trước khi cho
 truy cập trang `/config`.
 
+## Kênh của tôi (Google OAuth, tuỳ chọn)
+
+Ngoài phân tích kênh công khai (YouTube Data API key), app còn cho phép
+**kết nối chính kênh YouTube của bạn** qua Google để xem dữ liệu riêng tư mà
+API key thường không bao giờ thấy được: giờ xem, nguồn traffic, video xem
+nhiều nhất, doanh thu ước tính và trạng thái kiếm tiền — vào mục **"Kênh của
+tôi"** trên nav.
+
+Tính năng này hoàn toàn tuỳ chọn — không cấu hình thì phần còn lại của app
+vẫn chạy bình thường, chỉ riêng "Kênh của tôi" báo lỗi rõ ràng khi bấm vào.
+
+**Thiết lập trên Google Cloud Console** (project có thể dùng chung với
+project đã tạo YouTube API key ở trên):
+
+1. **APIs & Services → Library** → bật thêm **"YouTube Analytics API"**
+   (khác với "YouTube Data API v3" đã bật trước đó).
+2. **APIs & Services → OAuth consent screen** → chọn **External** → điền tên
+   app, email hỗ trợ → ở mục **Test users**, thêm chính email Google của
+   bạn. Giữ app ở chế độ **Testing** (không cần nộp Google verify) — đủ dùng
+   cho 1 người vận hành; verify chỉ cần khi mở cho người ngoài dùng.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   → Application type **Web application** → ở **Authorized redirect URIs**,
+   thêm đúng URL callback của backend, ví dụ cả hai:
+   - `http://localhost:8080/api/oauth/google/callback` (chạy local)
+   - `https://yt-agent-backend.vercel.app/api/oauth/google/callback` (khi
+     deploy — thay bằng domain backend thật của bạn)
+4. Copy **Client ID** và **Client secret**, set vào biến môi trường backend:
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URL`
+   (đúng bằng 1 trong các URI đã đăng ký ở bước 3), `FRONTEND_URL` (domain
+   frontend, để backend biết redirect trình duyệt về đâu sau khi xong).
+
+Doanh thu (`estimatedRevenue`) chỉ trả về nếu kênh đã bật kiếm tiền **và**
+tài khoản Google kết nối có quyền xem doanh thu của kênh đó — nếu không, app
+tự hiển thị "Chưa bật kiếm tiền" thay vì báo lỗi. Token OAuth (access +
+refresh) được lưu trong bảng `connected_channels` của Postgres, không mã
+hoá — cùng mức bảo mật với các API key khác trong app này.
+
 ## Deploy lên Vercel
 
 Vercel không giữ được goroutine chạy nền cho runtime Go sau khi handler trả
@@ -96,6 +135,10 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
   chọn `backend/`. Vercel tự nhận diện Go qua `go.mod` + `cmd/server/main.go`.
 - Biến môi trường cần set trong project settings:
   - `DATABASE_URL` = connection string Neon ở bước 1
+  - `APP_PASSWORD` = **bắt buộc** một khi đã deploy công khai. Toàn bộ
+    `/api/*` (trừ `/api/auth/login`, `/healthz`) yêu cầu đăng nhập bằng mật
+    khẩu này — không set thì ai có URL cũng gọi được API, tốn quota
+    YouTube/DeepSeek và đọc/đổi được key trong `/config` của bạn.
   - `CORS_ORIGIN` (tuỳ chọn) = danh sách domain frontend được phép gọi API,
     cách nhau bằng dấu phẩy. Để trống thì cho phép mọi origin — API này
     không dùng cookie/session nên để trống vẫn an toàn, không bắt buộc phải
@@ -103,6 +146,13 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
     `*.vercel.app` tự sinh, domain riêng mỗi preview) nên nếu điền, nhớ liệt
     kê đủ domain bạn sẽ gọi tới, ví dụ:
     `https://yt-agent-fe.vercel.app,https://yt-agent.example.com`
+  - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URL`,
+    `FRONTEND_URL` (tuỳ chọn) — chỉ cần nếu dùng "Kênh của tôi", xem phần
+    [Kênh của tôi](#kênh-của-tôi-google-oauth-tuỳ-chọn) ở trên.
+    `GOOGLE_OAUTH_REDIRECT_URL` phải là URL backend thật sau khi deploy
+    (`https://<domain-backend>/api/oauth/google/callback`), và URL này phải
+    được thêm vào Authorized redirect URIs của OAuth client trên Google
+    Cloud Console.
 - Không cần cấu hình `maxDuration` thủ công: với Fluid Compute (mặc định cho
   project mới), Vercel cho **300s/function** ngay cả ở Hobby — đủ dư cho bước
   gọi DeepSeek. `maxDuration` cũng không cấu hình được qua `functions` trong
@@ -127,12 +177,24 @@ pooled (`...pooler...neon.tech/...?sslmode=require`).
 
 | Method | Path                       | Mô tả                                   |
 |--------|----------------------------|------------------------------------------|
+| POST   | `/api/auth/login`          | Body `{ "password": "..." }`. Không cần token — dùng để lấy xác nhận trước khi FE lưu mật khẩu |
 | POST   | `/api/analyses`            | Body `{ "url": "..." }`. Chạy đồng bộ bước 1 rồi trả về `Analysis` đầy đủ; `412` nếu chưa cấu hình key |
 | POST   | `/api/analyses/:id/step`   | Đẩy job tiến 1 bước, trả về `Analysis` hiện tại. No-op nếu đã done/failed |
 | GET    | `/api/analyses/:id`        | Trạng thái + kết quả đầy đủ              |
 | GET    | `/api/analyses`            | Danh sách 50 phân tích gần nhất          |
 | GET    | `/api/settings`            | Cấu hình hiện tại (key được che, chỉ hiện 4 ký tự cuối) |
 | PUT    | `/api/settings`            | Cập nhật key/model/số video mẫu. Field key để trống = giữ nguyên giá trị cũ |
+| GET    | `/api/trending?region=VN&category=20&max=25` | Báo cáo kênh đang trending theo khu vực, tuỳ chọn lọc theo `category` (id danh mục video, lấy từ endpoint dưới) — không lưu DB, live mỗi lần gọi |
+| GET    | `/api/trending/categories?region=VN` | Danh sách danh mục video khả dụng theo khu vực (tên được localize theo `region`) |
+| POST   | `/api/trending/insight`    | Body là `TrendingReport` (lấy từ `GET /api/trending`) → DeepSeek tóm tắt xu hướng + gợi ý cơ hội nội dung |
+| GET    | `/api/oauth/google/url`    | Trả về URL đăng nhập Google (state đã ký) để FE điều hướng cả tab sang |
+| GET    | `/api/oauth/google/callback` | Google redirect về đây sau khi người dùng đồng ý cấp quyền — không cần token, xác thực qua `state` |
+| GET    | `/api/channels`            | Danh sách kênh đã kết nối qua Google OAuth |
+| DELETE | `/api/channels/:id`        | Ngắt kết nối 1 kênh (thu hồi token ở Google + xoá khỏi DB) |
+| GET    | `/api/channels/:id/analytics` | Snapshot YouTube Analytics riêng tư 28 ngày gần nhất: lượt xem, giờ xem, nguồn traffic, video xem nhiều nhất, doanh thu ước tính, trạng thái kiếm tiền |
+
+Tất cả endpoint trên (trừ `/api/auth/login`, `/api/oauth/google/callback`,
+`/healthz`) yêu cầu header `Authorization: Bearer <APP_PASSWORD>`.
 
 `status` đi qua các bước: `pending → fetching → analyzing → generating → done`
 (hoặc `failed` kèm `errorMessage`).

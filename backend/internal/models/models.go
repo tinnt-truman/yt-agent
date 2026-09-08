@@ -156,3 +156,114 @@ type HashtagSet struct {
 	Theme    string   `json:"theme"`
 	Hashtags []string `json:"hashtags"`
 }
+
+// VideoCategory is one assignable YouTube video category (e.g. "Gaming",
+// "Music") for a region — used to populate the trending report's topic
+// filter, since category IDs are stable but titles are localized per region.
+type VideoCategory struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// TrendingVideo is one video from YouTube's "mostPopular" chart for a region.
+type TrendingVideo struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Thumbnail    string `json:"thumbnail,omitempty"`
+	ChannelID    string `json:"channelId"`
+	ChannelTitle string `json:"channelTitle"`
+	ViewCount    int64  `json:"viewCount"`
+	LikeCount    int64  `json:"likeCount"`
+	CommentCount int64  `json:"commentCount"`
+	PublishedAt  string `json:"publishedAt"`
+	CategoryID   string `json:"categoryId,omitempty"`
+}
+
+// TrendingChannel aggregates the trending videos that belong to one channel,
+// enriched with the channel's own public stats.
+type TrendingChannel struct {
+	ChannelID          string          `json:"channelId"`
+	ChannelTitle       string          `json:"channelTitle"`
+	ChannelThumbnail   string          `json:"channelThumbnail,omitempty"`
+	SubscriberCount    int64           `json:"subscriberCount"`
+	TrendingVideoCount int             `json:"trendingVideoCount"`
+	TotalViews         int64           `json:"totalViews"`
+	Videos             []TrendingVideo `json:"videos"`
+}
+
+// TrendingReport is the full trending-channels report for one region.
+type TrendingReport struct {
+	Region      string            `json:"region"`
+	Channels    []TrendingChannel `json:"channels"`
+	GeneratedAt time.Time         `json:"generatedAt"`
+}
+
+// TrendingInsight is an optional AI-generated commentary over a TrendingReport.
+type TrendingInsight struct {
+	Summary       string   `json:"summary"`
+	Opportunities []string `json:"opportunities"`
+}
+
+// ConnectedChannel is a YouTube channel the operator has linked via Google
+// OAuth, granting access to that channel's private YouTube Analytics data
+// (not just what the public Data API exposes). Tokens are never serialized
+// to JSON — see the API layer for the redacted response shape.
+type ConnectedChannel struct {
+	ID               string    `json:"id"`
+	ChannelID        string    `json:"channelId"`
+	ChannelTitle     string    `json:"channelTitle"`
+	ChannelThumbnail string    `json:"channelThumbnail,omitempty"`
+	SubscriberCount  int64     `json:"subscriberCount"`
+	GoogleEmail      string    `json:"googleEmail,omitempty"`
+	AccessToken      string    `json:"-"`
+	RefreshToken     string    `json:"-"`
+	TokenExpiry      time.Time `json:"-"`
+	Scopes           string    `json:"-"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+// MonetizationStatus reflects what we could actually determine about a
+// channel's monetization — YouTube's APIs expose no direct "is monetized"
+// field, so this is inferred from whether the revenue report query succeeds.
+type MonetizationStatus string
+
+const (
+	MonetizationEnabled  MonetizationStatus = "enabled"
+	MonetizationDisabled MonetizationStatus = "disabled"
+	MonetizationUnknown  MonetizationStatus = "unknown"
+)
+
+// TrafficSourceShare is one row of the traffic-source breakdown.
+type TrafficSourceShare struct {
+	Source   string  `json:"source"`
+	Views    int64   `json:"views"`
+	SharePct float64 `json:"sharePct"`
+}
+
+// TopVideoByWatchTime is one row of the "top content" list, ranked by
+// estimated minutes watched over the report window.
+type TopVideoByWatchTime struct {
+	VideoID          string `json:"videoId"`
+	Title            string `json:"title"`
+	Thumbnail        string `json:"thumbnail,omitempty"`
+	EstimatedMinutes int64  `json:"estimatedMinutesWatched"`
+}
+
+// ChannelAnalytics is a private YouTube Analytics snapshot for one connected
+// channel over a fixed recent window (see analytics.WindowDays).
+type ChannelAnalytics struct {
+	WindowDays              int                   `json:"windowDays"`
+	Views                   int64                 `json:"views"`
+	EstimatedMinutesWatched int64                 `json:"estimatedMinutesWatched"`
+	AverageViewDurationSecs int64                 `json:"averageViewDurationSeconds"`
+	SubscribersGained       int64                 `json:"subscribersGained"`
+	SubscribersLost         int64                 `json:"subscribersLost"`
+	Impressions             int64                 `json:"impressions,omitempty"`
+	ImpressionsCTR          float64               `json:"impressionsCtr,omitempty"`
+	TrafficSources          []TrafficSourceShare  `json:"trafficSources,omitempty"`
+	TopVideos               []TopVideoByWatchTime `json:"topVideos,omitempty"`
+	Monetization            MonetizationStatus    `json:"monetization"`
+	EstimatedRevenueUSD     *float64              `json:"estimatedRevenueUsd,omitempty"`
+	RevenueNote             string                `json:"revenueNote,omitempty"`
+}

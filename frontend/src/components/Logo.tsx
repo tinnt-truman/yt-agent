@@ -1,0 +1,18 @@
+export function Logo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="logo-bg" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#4f46e5" />
+          <stop offset="1" stopColor="#7c3aed" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="44" height="44" rx="13" fill="url(#logo-bg)" />
+      <path d="M17 14 L17 34 L33 24 Z" fill="#ffffff" />
+      <path
+        d="M35.746 5.5a.31.31 0 0 1 .598 0l.981 3.807a1.24 1.24 0 0 0 .892.892l3.807.981a.31.31 0 0 1 0 .598l-3.807.981a1.24 1.24 0 0 0-.892.892l-.981 3.807a.31.31 0 0 1-.598 0l-.981-3.807a1.24 1.24 0 0 0-.892-.892l-3.807-.981a.31.31 0 0 1 0-.598l3.807-.981a1.24 1.24 0 0 0 .892-.892z"
+        fill="#fcd34d"
+      />
+    </svg>
+  )
+}

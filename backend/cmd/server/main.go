@@ -26,6 +26,7 @@ func main() {
 
 	store := db.NewStore(database)
 	settingsStore := db.NewSettingsStore(database)
+	connectedChannelStore := db.NewConnectedChannelStore(database)
 
 	if err := settingsStore.SeedFromEnv(ctx, cfg.SeedYouTubeAPIKey, cfg.SeedDeepSeekAPIKey, cfg.SeedAIModel, cfg.SeedMaxVideos); err != nil {
 		log.Fatalf("settings seed error: %v", err)
@@ -34,8 +35,18 @@ func main() {
 	w := worker.New(store, settingsStore)
 	handler := api.NewHandler(store, settingsStore, w)
 	settingsHandler := api.NewSettingsHandler(settingsStore)
-	router := api.NewRouter(handler, settingsHandler, cfg.CORSOrigins)
+	trendingHandler := api.NewTrendingHandler(settingsStore)
+	oauthHandler := api.NewOAuthHandler(cfg, connectedChannelStore)
+	channelsHandler := api.NewChannelsHandler(cfg, connectedChannelStore, settingsStore)
+	authHandler := api.NewAuthHandler(cfg.AppPassword)
+	router := api.NewRouter(handler, settingsHandler, trendingHandler, oauthHandler, channelsHandler, authHandler, cfg.CORSOrigins, cfg.AppPassword)
 
+	if cfg.AppPassword == "" {
+		log.Println("warning: APP_PASSWORD is not set — the API is open to anyone who can reach it")
+	}
+	if cfg.GoogleClientID == "" {
+		log.Println("info: Google OAuth not configured — \"Kênh của tôi\" (connected channels) will be unavailable until GOOGLE_CLIENT_ID/SECRET/REDIRECT_URL and FRONTEND_URL are set")
+	}
 	log.Printf("listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
 		log.Fatal(err)

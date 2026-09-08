@@ -125,6 +125,46 @@ func (c *Client) GenerateStrategy(ctx context.Context, analysis models.AnalysisR
 	return &out, nil
 }
 
+const trendingInsightSystemPrompt = `Bạn là chuyên gia phân tích xu hướng YouTube. Bạn sẽ nhận danh sách các kênh đang có video trending (JSON), gồm tên kênh, số video đang trending, tổng lượt xem, subscriber. Hãy tóm tắt ngắn gọn các chủ đề/ngách đang nổi bật trong danh sách này, và gợi ý 3-5 cơ hội nội dung cụ thể mà một kênh mới có thể khai thác dựa trên xu hướng này.
+
+Trả lời bằng tiếng Việt. Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
+
+{
+  "summary": "string, 3-5 câu tóm tắt xu hướng nổi bật",
+  "opportunities": ["string", "..."]
+}`
+
+// GenerateTrendingInsight summarizes a trending-channels report into a short
+// written commentary. Optional and on-demand from the frontend — unlike
+// GenerateStrategy this isn't part of the core pipeline.
+func (c *Client) GenerateTrendingInsight(ctx context.Context, report models.TrendingReport) (*models.TrendingInsight, error) {
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		return nil, fmt.Errorf("marshal report: %w", err)
+	}
+
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: trendingInsightSystemPrompt},
+			{Role: "user", Content: fmt.Sprintf("Danh sách kênh trending (JSON):\n%s", string(reportJSON))},
+		},
+		ResponseFormat: &responseFormat{Type: "json_object"},
+		MaxTokens:      2000,
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.TrendingInsight
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse trending insight JSON: %w", err)
+	}
+	return &out, nil
+}
+
 func (c *Client) chat(ctx context.Context, reqBody chatRequest) (string, error) {
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

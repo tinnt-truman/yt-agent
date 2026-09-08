@@ -4,26 +4,31 @@ import { formatCompact, formatDate } from '../lib/format'
 export function TopVideos({ videos }: { videos: VideoInfo[] }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-slate-900">Video nổi bật</h2>
-      <div className="mt-4 space-y-3">
+      <h2 className="text-base font-semibold text-slate-900">Video nổi bật</h2>
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {videos.map((v) => (
           <a
             key={v.id}
             href={`https://www.youtube.com/watch?v=${v.id}`}
             target="_blank"
             rel="noreferrer"
-            className="flex gap-3 rounded-md p-2 hover:bg-slate-50"
+            className="group"
           >
-            {v.thumbnail && (
-              <img src={v.thumbnail} alt="" className="h-16 w-28 shrink-0 rounded object-cover" />
+            {v.thumbnail ? (
+              <img
+                src={v.thumbnail}
+                alt=""
+                className="aspect-video w-full rounded-md object-cover"
+              />
+            ) : (
+              <div className="aspect-video w-full rounded-md bg-slate-100" />
             )}
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-900">{v.title}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {formatCompact(v.viewCount)} views · {formatCompact(v.likeCount)} likes ·{' '}
-                {formatDate(v.publishedAt)}
-              </p>
-            </div>
+            <p className="mt-1.5 line-clamp-2 text-xs font-medium text-slate-900 group-hover:text-indigo-600">
+              {v.title}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {formatCompact(v.viewCount)} views · {formatDate(v.publishedAt)}
+            </p>
           </a>
         ))}
       </div>

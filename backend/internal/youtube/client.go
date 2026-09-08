@@ -241,6 +241,160 @@ func (c *Client) FetchRecentVideos(ctx context.Context, uploadsPlaylistID string
 	return c.fetchVideoDetails(ctx, videoIDs)
 }
 
+// FetchTrendingVideos returns YouTube's "mostPopular" chart for a region,
+// optionally narrowed to one video category (categoryID from
+// FetchVideoCategories; empty means all categories) — the closest thing the
+// Data API offers to "what's trending right now". There is no separate
+// "trending channels" endpoint; the report is built by grouping these
+// videos by channel (see internal/trending). Capped at 50 (one page, one
+// quota unit) since that's plenty for a report.
+func (c *Client) FetchTrendingVideos(ctx context.Context, regionCode, categoryID string, maxResults int) ([]models.TrendingVideo, error) {
+	if maxResults <= 0 || maxResults > 50 {
+		maxResults = 50
+	}
+
+	var resp struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Snippet struct {
+				Title        string `json:"title"`
+				ChannelID    string `json:"channelId"`
+				ChannelTitle string `json:"channelTitle"`
+				PublishedAt  string `json:"publishedAt"`
+				CategoryID   string `json:"categoryId"`
+				Thumbnails   struct {
+					High struct {
+						URL string `json:"url"`
+					} `json:"high"`
+				} `json:"thumbnails"`
+			} `json:"snippet"`
+			Statistics struct {
+				ViewCount    string `json:"viewCount"`
+				LikeCount    string `json:"likeCount"`
+				CommentCount string `json:"commentCount"`
+			} `json:"statistics"`
+		} `json:"items"`
+	}
+
+	params := url.Values{
+		"part":       {"snippet,statistics"},
+		"chart":      {"mostPopular"},
+		"regionCode": {regionCode},
+		"maxResults": {strconv.Itoa(maxResults)},
+	}
+	if categoryID != "" {
+		params.Set("videoCategoryId", categoryID)
+	}
+
+	if err := c.get(ctx, "/videos", params, &resp); err != nil {
+		return nil, err
+	}
+
+	videos := make([]models.TrendingVideo, 0, len(resp.Items))
+	for _, item := range resp.Items {
+		videos = append(videos, models.TrendingVideo{
+			ID:           item.ID,
+			Title:        item.Snippet.Title,
+			Thumbnail:    item.Snippet.Thumbnails.High.URL,
+			ChannelID:    item.Snippet.ChannelID,
+			ChannelTitle: item.Snippet.ChannelTitle,
+			ViewCount:    parseInt64(item.Statistics.ViewCount),
+			LikeCount:    parseInt64(item.Statistics.LikeCount),
+			CommentCount: parseInt64(item.Statistics.CommentCount),
+			PublishedAt:  item.Snippet.PublishedAt,
+			CategoryID:   item.Snippet.CategoryID,
+		})
+	}
+	return videos, nil
+}
+
+// FetchVideoCategories lists YouTube's assignable video categories for a
+// region (names are localized per region, and not every category is
+// assignable in every region — e.g. some regions omit "Shows"), so the
+// frontend's filter dropdown is built from this instead of a hardcoded list.
+func (c *Client) FetchVideoCategories(ctx context.Context, regionCode string) ([]models.VideoCategory, error) {
+	var resp struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Snippet struct {
+				Title      string `json:"title"`
+				Assignable bool   `json:"assignable"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+
+	if err := c.get(ctx, "/videoCategories", url.Values{
+		"part":       {"snippet"},
+		"regionCode": {regionCode},
+	}, &resp); err != nil {
+		return nil, err
+	}
+
+	categories := make([]models.VideoCategory, 0, len(resp.Items))
+	for _, item := range resp.Items {
+		if !item.Snippet.Assignable {
+			continue
+		}
+		categories = append(categories, models.VideoCategory{
+			ID:    item.ID,
+			Title: item.Snippet.Title,
+		})
+	}
+	return categories, nil
+}
+
+// FetchChannelsBasic returns basic public info (thumbnail, subscriber count)
+// for a batch of channel IDs, keyed by channel ID. Used to enrich a trending
+// report — one call for up to 50 channels.
+func (c *Client) FetchChannelsBasic(ctx context.Context, channelIDs []string) (map[string]models.ChannelInfo, error) {
+	result := make(map[string]models.ChannelInfo, len(channelIDs))
+	if len(channelIDs) == 0 {
+		return result, nil
+	}
+
+	for i := 0; i < len(channelIDs); i += 50 {
+		end := i + 50
+		if end > len(channelIDs) {
+			end = len(channelIDs)
+		}
+		batch := channelIDs[i:end]
+
+		var resp struct {
+			Items []struct {
+				ID      string `json:"id"`
+				Snippet struct {
+					Title      string `json:"title"`
+					Thumbnails struct {
+						High struct {
+							URL string `json:"url"`
+						} `json:"high"`
+					} `json:"thumbnails"`
+				} `json:"snippet"`
+				Statistics struct {
+					SubscriberCount string `json:"subscriberCount"`
+				} `json:"statistics"`
+			} `json:"items"`
+		}
+
+		if err := c.get(ctx, "/channels", url.Values{
+			"part": {"snippet,statistics"},
+			"id":   {strings.Join(batch, ",")},
+		}, &resp); err != nil {
+			return nil, err
+		}
+
+		for _, item := range resp.Items {
+			result[item.ID] = models.ChannelInfo{
+				ID:              item.ID,
+				Title:           item.Snippet.Title,
+				Thumbnail:       item.Snippet.Thumbnails.High.URL,
+				SubscriberCount: parseInt64(item.Statistics.SubscriberCount),
+			}
+		}
+	}
+	return result, nil
+}
+
 func (c *Client) listPlaylistVideoIDs(ctx context.Context, playlistID string, maxVideos int) ([]string, error) {
 	var ids []string
 	pageToken := ""

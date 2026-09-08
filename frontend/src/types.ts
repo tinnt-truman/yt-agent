@@ -143,3 +143,84 @@ export interface StrategyOutput {
   growthTactics: string[]
   risks: string[]
 }
+
+export interface TrendingVideo {
+  id: string
+  title: string
+  thumbnail?: string
+  channelId: string
+  channelTitle: string
+  viewCount: number
+  likeCount: number
+  commentCount: number
+  publishedAt: string
+  categoryId?: string
+}
+
+export interface TrendingChannel {
+  channelId: string
+  channelTitle: string
+  channelThumbnail?: string
+  subscriberCount: number
+  trendingVideoCount: number
+  totalViews: number
+  videos: TrendingVideo[]
+}
+
+export interface TrendingReport {
+  region: string
+  channels: TrendingChannel[]
+  generatedAt: string
+}
+
+export interface VideoCategory {
+  id: string
+  title: string
+}
+
+export interface TrendingInsight {
+  summary: string
+  opportunities: string[]
+}
+
+export interface ConnectedChannel {
+  id: string
+  channelId: string
+  channelTitle: string
+  channelThumbnail?: string
+  subscriberCount: number
+  googleEmail?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type MonetizationStatus = 'enabled' | 'disabled' | 'unknown'
+
+export interface TrafficSourceShare {
+  source: string
+  views: number
+  sharePct: number
+}
+
+export interface TopVideoByWatchTime {
+  videoId: string
+  title: string
+  thumbnail?: string
+  estimatedMinutesWatched: number
+}
+
+export interface ChannelAnalytics {
+  windowDays: number
+  views: number
+  estimatedMinutesWatched: number
+  averageViewDurationSeconds: number
+  subscribersGained: number
+  subscribersLost: number
+  impressions?: number
+  impressionsCtr?: number
+  trafficSources?: TrafficSourceShare[]
+  topVideos?: TopVideoByWatchTime[]
+  monetization: MonetizationStatus
+  estimatedRevenueUsd?: number
+  revenueNote?: string
+}

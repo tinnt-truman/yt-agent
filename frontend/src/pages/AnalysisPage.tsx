@@ -7,6 +7,7 @@ import { ChannelOverview } from '../components/ChannelOverview'
 import { TopVideos } from '../components/TopVideos'
 import { TagsAndTitles } from '../components/TagsAndTitles'
 import { StrategySections } from '../components/StrategySections'
+import { SectionEyebrow, AnalysisIcon, SparkleIcon } from '../components/SectionEyebrow'
 
 const POLL_INTERVAL_MS = 3000
 const ACTIVE_STATUSES = new Set(['pending', 'fetching', 'analyzing', 'generating'])
@@ -77,10 +78,28 @@ export default function AnalysisPage() {
         </div>
       )}
 
-      {result && <ChannelOverview analysis={result} />}
-      {result && <TopVideos videos={result.topVideos} />}
-      {result && <TagsAndTitles tags={result.commonTags} titlePatterns={result.titlePatterns} />}
-      {strategy && <StrategySections strategy={strategy} />}
+      {result && (
+        <div className="space-y-4">
+          <SectionEyebrow icon={<AnalysisIcon />}>Phân tích kênh tham khảo</SectionEyebrow>
+          <ChannelOverview analysis={result} />
+          <TopVideos videos={result.topVideos} />
+          <TagsAndTitles tags={result.commonTags} titlePatterns={result.titlePatterns} />
+        </div>
+      )}
+
+      {strategy && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <SectionEyebrow icon={<SparkleIcon className="text-violet-700" />} accent>
+              Chiến lược AI cho kênh mới
+            </SectionEyebrow>
+            <span className="flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+              <SparkleIcon className="h-2.5 w-2.5" /> AI đề xuất
+            </span>
+          </div>
+          <StrategySections strategy={strategy} />
+        </div>
+      )}
     </div>
   )
 }
