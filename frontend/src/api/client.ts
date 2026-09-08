@@ -2,7 +2,7 @@ import type {
   Analysis,
   ChannelAnalytics,
   ConnectedChannel,
-  Script,
+  ScriptJob,
   ScriptRequest,
   Settings,
   TrendingInsight,
@@ -172,11 +172,28 @@ export async function generateVideoPrompt(req: VideoPromptRequest): Promise<Vide
   return handle(res)
 }
 
-export async function generateScript(req: ScriptRequest): Promise<Script> {
-  const res = await fetch(`${API_BASE}/api/scripts/generate`, {
+// createScriptJob queues a script-generation job and returns it immediately
+// at "pending" — like createAnalysis, the caller drives it forward via
+// stepScriptJob on a poll loop (no backend background worker; see
+// stepAnalysis for why).
+export async function createScriptJob(req: ScriptRequest): Promise<ScriptJob> {
+  const res = await fetch(`${API_BASE}/api/scripts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(req),
   })
+  return handle(res)
+}
+
+export async function stepScriptJob(id: string): Promise<ScriptJob> {
+  const res = await fetch(`${API_BASE}/api/scripts/${id}/step`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handle(res)
+}
+
+export async function listScriptJobs(): Promise<ScriptJob[]> {
+  const res = await fetch(`${API_BASE}/api/scripts`, { headers: authHeaders() })
   return handle(res)
 }

@@ -314,3 +314,31 @@ type Script struct {
 	CallToAction   string        `json:"callToAction"`
 	DurationFormat string        `json:"durationFormat"`
 }
+
+type ScriptJobStatus string
+
+const (
+	ScriptStatusPending ScriptJobStatus = "pending"
+	ScriptStatusDone    ScriptJobStatus = "done"
+	ScriptStatusFailed  ScriptJobStatus = "failed"
+)
+
+// ScriptJob is the persisted row for one generate-a-script job. Queued and
+// advanced one step at a time — like Analysis — rather than generated
+// synchronously in the create request, so a slow DeepSeek call never ties up
+// that request (and matters even more on Vercel's Go runtime, which doesn't
+// keep goroutines alive once the HTTP response is sent). Also gives the
+// frontend a persisted history of past scripts to revisit without
+// regenerating them.
+type ScriptJob struct {
+	ID              string          `json:"id"`
+	IdeaTitle       string          `json:"ideaTitle"`
+	IdeaDescription string          `json:"ideaDescription,omitempty"`
+	IdeaHook        string          `json:"ideaHook,omitempty"`
+	DurationFormat  string          `json:"durationFormat"`
+	Status          ScriptJobStatus `json:"status"`
+	ErrorMessage    string          `json:"errorMessage,omitempty"`
+	ScriptJSON      json.RawMessage `json:"script,omitempty"`
+	CreatedAt       time.Time       `json:"createdAt"`
+	UpdatedAt       time.Time       `json:"updatedAt"`
+}

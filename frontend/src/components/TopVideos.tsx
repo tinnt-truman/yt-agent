@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import type { VideoInfo } from '../types'
-import { formatCompact, formatDate } from '../lib/format'
+import { formatCompact, formatDate, formatDuration } from '../lib/format'
+import { ScriptModal } from './ScriptModal'
 import { VideoPromptModal } from './VideoPromptModal'
 
 export function TopVideos({ videos }: { videos: VideoInfo[] }) {
   const [promptVideo, setPromptVideo] = useState<VideoInfo | null>(null)
+  const [scriptVideo, setScriptVideo] = useState<VideoInfo | null>(null)
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -36,9 +38,15 @@ export function TopVideos({ videos }: { videos: VideoInfo[] }) {
             </a>
             <button
               onClick={() => setPromptVideo(v)}
-              className="mt-1.5 text-[11px] font-medium text-violet-700 hover:text-violet-900"
+              className="mt-1.5 block text-[11px] font-medium text-violet-700 hover:text-violet-900"
             >
               ✦ Tạo prompt AI video
+            </button>
+            <button
+              onClick={() => setScriptVideo(v)}
+              className="mt-1 block text-[11px] font-medium text-indigo-700 hover:text-indigo-900"
+            >
+              Tạo kịch bản tóm tắt
             </button>
           </div>
         ))}
@@ -52,6 +60,19 @@ export function TopVideos({ videos }: { videos: VideoInfo[] }) {
             tags: promptVideo.tags,
           }}
           onClose={() => setPromptVideo(null)}
+        />
+      )}
+
+      {scriptVideo && (
+        <ScriptModal
+          idea={{
+            title: scriptVideo.title,
+            description: scriptVideo.description ?? '',
+            hook: scriptVideo.title,
+            format: scriptVideo.isShort ? 'Shorts' : 'Long-form',
+            estimatedLength: formatDuration(scriptVideo.durationSeconds),
+          }}
+          onClose={() => setScriptVideo(null)}
         />
       )}
     </section>

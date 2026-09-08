@@ -136,6 +136,21 @@ export interface Script {
   durationFormat: ScriptDurationFormat
 }
 
+export type ScriptJobStatus = 'pending' | 'done' | 'failed'
+
+export interface ScriptJob {
+  id: string
+  ideaTitle: string
+  ideaDescription?: string
+  ideaHook?: string
+  durationFormat: ScriptDurationFormat
+  status: ScriptJobStatus
+  errorMessage?: string
+  script?: Script
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Settings {
   configured: boolean
   youtubeApiKeySet: boolean
