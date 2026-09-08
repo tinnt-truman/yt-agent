@@ -136,6 +136,15 @@ func (h *ScriptHandler) GetScript(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
+func (h *ScriptHandler) DeleteScript(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.store.Delete(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete script job")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // ListScripts returns the generation history (newest first) so past scripts
 // can be revisited without regenerating them.
 func (h *ScriptHandler) ListScripts(w http.ResponseWriter, r *http.Request) {

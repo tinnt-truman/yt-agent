@@ -110,7 +110,7 @@ func (c *Client) GenerateStrategy(ctx context.Context, analysis models.AnalysisR
 			{Role: "user", Content: userContent},
 		},
 		ResponseFormat: &responseFormat{Type: "json_object"},
-		MaxTokens:      8000,
+		MaxTokens:      16000,
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -150,7 +150,7 @@ func (c *Client) GenerateTrendingInsight(ctx context.Context, report models.Tren
 			{Role: "user", Content: fmt.Sprintf("Danh sách kênh trending (JSON):\n%s", string(reportJSON))},
 		},
 		ResponseFormat: &responseFormat{Type: "json_object"},
-		MaxTokens:      2000,
+		MaxTokens:      4000,
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -198,7 +198,7 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
 		},
 		ResponseFormat: &responseFormat{Type: "json_object"},
-		MaxTokens:      1000,
+		MaxTokens:      2000,
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -248,7 +248,7 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 			{Role: "user", Content: fmt.Sprintf("Ý tưởng nội dung (JSON):\n%s", string(reqJSON))},
 		},
 		ResponseFormat: &responseFormat{Type: "json_object"},
-		MaxTokens:      3000,
+		MaxTokens:      6000,
 	}
 
 	text, err := c.chat(ctx, reqBody)

@@ -46,6 +46,11 @@ func (s *ScriptStore) SetFailed(ctx context.Context, id, errMsg string) error {
 	return err
 }
 
+func (s *ScriptStore) Delete(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM scripts WHERE id = $1`, id)
+	return err
+}
+
 func (s *ScriptStore) GetByID(ctx context.Context, id string) (*models.ScriptJob, error) {
 	var j models.ScriptJob
 	var description, hook, errorMessage sql.NullString

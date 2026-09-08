@@ -22,6 +22,7 @@ func NewRouter(
 	protected.HandleFunc("GET /api/analyses", h.ListAnalyses)
 	protected.HandleFunc("GET /api/analyses/{id}", h.GetAnalysis)
 	protected.HandleFunc("POST /api/analyses/{id}/step", h.AdvanceStep)
+	protected.HandleFunc("DELETE /api/analyses/{id}", h.DeleteAnalysis)
 	protected.HandleFunc("GET /api/settings", sh.GetSettings)
 	protected.HandleFunc("PUT /api/settings", sh.UpdateSettings)
 	protected.HandleFunc("GET /api/trending", th.GetTrending)
@@ -36,6 +37,7 @@ func NewRouter(
 	protected.HandleFunc("GET /api/scripts", sch.ListScripts)
 	protected.HandleFunc("GET /api/scripts/{id}", sch.GetScript)
 	protected.HandleFunc("POST /api/scripts/{id}/step", sch.AdvanceStep)
+	protected.HandleFunc("DELETE /api/scripts/{id}", sch.DeleteScript)
 
 	mux := http.NewServeMux()
 	// Registered directly on the outer mux (not under requireAuth): login

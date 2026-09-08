@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createAnalysis, listAnalyses } from '../api/client'
+import { createAnalysis, deleteAnalysis, listAnalyses } from '../api/client'
 import type { Analysis } from '../types'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -10,6 +10,7 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [reanalyzingId, setReanalyzingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -32,6 +33,22 @@ export default function HistoryPage() {
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Không tạo được phân tích mới')
       setReanalyzingId(null)
+    }
+  }
+
+  async function handleDelete(item: Analysis, e: React.MouseEvent) {
+    e.preventDefault() // don't follow the row's own Link
+    e.stopPropagation()
+    if (!window.confirm(`Xoá lịch sử phân tích "${item.channelTitle || item.inputUrl}"?`)) return
+    setActionError(null)
+    setDeletingId(item.id)
+    try {
+      await deleteAnalysis(item.id)
+      setItems((prev) => prev.filter((i) => i.id !== item.id))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không xoá được lịch sử phân tích')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -58,10 +75,17 @@ export default function HistoryPage() {
               <StatusBadge status={item.status} />
               <button
                 onClick={(e) => handleReanalyze(item, e)}
-                disabled={reanalyzingId === item.id}
+                disabled={reanalyzingId === item.id || deletingId === item.id}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
               >
                 {reanalyzingId === item.id ? 'Đang tạo...' : 'Phân tích lại'}
+              </button>
+              <button
+                onClick={(e) => handleDelete(item, e)}
+                disabled={deletingId === item.id || reanalyzingId === item.id}
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                {deletingId === item.id ? 'Đang xoá...' : 'Xoá'}
               </button>
             </div>
           </div>

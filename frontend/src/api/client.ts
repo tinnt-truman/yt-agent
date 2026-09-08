@@ -91,6 +91,14 @@ export async function listAnalyses(): Promise<Analysis[]> {
   return handle(res)
 }
 
+export async function deleteAnalysis(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/analyses/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  await handle(res)
+}
+
 export async function getSettings(): Promise<Settings> {
   const res = await fetch(`${API_BASE}/api/settings`, { headers: authHeaders() })
   return handle(res)
@@ -196,4 +204,12 @@ export async function stepScriptJob(id: string): Promise<ScriptJob> {
 export async function listScriptJobs(): Promise<ScriptJob[]> {
   const res = await fetch(`${API_BASE}/api/scripts`, { headers: authHeaders() })
   return handle(res)
+}
+
+export async function deleteScriptJob(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/scripts/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  await handle(res)
 }

@@ -106,6 +106,15 @@ func (h *Handler) GetAnalysis(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, analysis)
 }
 
+func (h *Handler) DeleteAnalysis(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.store.DeleteAnalysis(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete analysis")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (h *Handler) ListAnalyses(w http.ResponseWriter, r *http.Request) {
 	items, err := h.store.ListRecent(r.Context(), 50)
 	if err != nil {

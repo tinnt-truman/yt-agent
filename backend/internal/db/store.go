@@ -73,6 +73,11 @@ func (s *Store) SetFailed(ctx context.Context, id, errMsg string) error {
 	return err
 }
 
+func (s *Store) DeleteAnalysis(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM analyses WHERE id = $1`, id)
+	return err
+}
+
 func (s *Store) GetByID(ctx context.Context, id string) (*models.Analysis, error) {
 	var a models.Analysis
 	var channelID, channelTitle, stageMessage, errorMessage sql.NullString

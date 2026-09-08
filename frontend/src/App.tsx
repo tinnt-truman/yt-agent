@@ -2,6 +2,7 @@ import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
+import ScriptsPage from './pages/ScriptsPage'
 import SettingsPage from './pages/SettingsPage'
 import TrendingPage from './pages/TrendingPage'
 import ChannelsPage from './pages/ChannelsPage'
@@ -46,6 +47,9 @@ function AuthGate() {
               <Link to="/history" className="hover:text-slate-900">
                 Lịch sử
               </Link>
+              <Link to="/scripts" className="hover:text-slate-900">
+                Kịch bản
+              </Link>
               <Link to="/config" className="hover:text-slate-900">
                 Cài đặt
               </Link>
@@ -80,6 +84,7 @@ function AppRoutes() {
       <Route path="/channels" element={<ChannelsPage />} />
       <Route path="/channels/:id" element={<ChannelDetailPage />} />
       <Route path="/history" element={<HistoryPage />} />
+      <Route path="/scripts" element={<ScriptsPage />} />
       <Route path="/config" element={<SettingsPage />} />
     </Routes>
   )
