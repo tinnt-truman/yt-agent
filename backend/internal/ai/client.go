@@ -14,6 +14,7 @@
 package ai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -513,6 +514,18 @@ func (c *Client) chat(ctx context.Context, reqBody chatRequest) (string, error) 
 	if c.endpoint == EndpointResponses {
 		return c.responses(ctx, reqBody)
 	}
+	if c.provider == Provider9Router {
+		// Confirmed against a real running 9Router instance: at least its
+		// OpenCode Free models reliably return HTTP 200 with an empty
+		// message.content when stream is false — content-less "success" that
+		// chatCompletions can't tell apart from a genuinely empty answer.
+		// The same models answer correctly when streamed, so 9Router always
+		// streams and reassembles the full text from the SSE chunks instead.
+		// See https://github.com/decolua/9router/issues/1025 for the same
+		// class of bug reported upstream for other providers/endpoints.
+		reqBody.Stream = true
+		return c.chatCompletionsStream(ctx, reqBody)
+	}
 	return c.chatCompletions(ctx, reqBody)
 }
 
@@ -572,6 +585,98 @@ func (c *Client) chatCompletions(ctx context.Context, reqBody chatRequest) (stri
 		return "", fmt.Errorf("ai output was truncated (hit max_tokens); increase MaxTokens and retry")
 	}
 	return extractJSON(choice.Message.Content)
+}
+
+// chatStreamChunk is one "data: {...}" line of an OpenAI-style SSE chat
+// completion stream — the delta variant of chatResponse's Choices.
+type chatStreamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+}
+
+// chatCompletionsStream is chatCompletions' 9Router-only counterpart: it
+// sends the same request (with Stream forced true by the caller) and
+// reassembles the full answer from the SSE response instead of expecting one
+// JSON object. Falls back to parsing the body as a plain (non-streamed)
+// response if it turns out not to be SSE at all — some models routed
+// through 9Router may still ignore "stream": true.
+func (c *Client) chatCompletionsStream(ctx context.Context, reqBody chatRequest) (string, error) {
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("ai request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read ai response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ai api error (status %d): %s", resp.StatusCode, string(raw))
+	}
+
+	if content, ok := parseSSEContent(raw); ok {
+		return extractJSON(content)
+	}
+
+	var parsed chatResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "", fmt.Errorf("parse ai response (status %d): %w", resp.StatusCode, err)
+	}
+	if len(parsed.Choices) == 0 {
+		return "", fmt.Errorf("ai returned no choices")
+	}
+	return extractJSON(parsed.Choices[0].Message.Content)
+}
+
+// parseSSEContent reassembles the full message text from an OpenAI-style SSE
+// response ("data: {...}" lines), concatenating each chunk's delta.content
+// in order — streaming only ever splits the text into pieces, never
+// reorders it, so simple concatenation reconstructs it exactly, JSON-mode
+// output included. ok is false when raw contains no "data:" line at all,
+// telling the caller to try parsing it as a single JSON object instead.
+func parseSSEContent(raw []byte) (content string, ok bool) {
+	var sb strings.Builder
+	scanner := bufio.NewScanner(bytes.NewReader(raw))
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	sawData := false
+	for scanner.Scan() {
+		data, isData := strings.CutPrefix(scanner.Text(), "data:")
+		if !isData {
+			continue
+		}
+		data = strings.TrimSpace(data)
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		sawData = true
+		var chunk chatStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		for _, choice := range chunk.Choices {
+			sb.WriteString(choice.Delta.Content)
+		}
+	}
+	if !sawData {
+		return "", false
+	}
+	return sb.String(), true
 }
 
 type responsesRequest struct {
