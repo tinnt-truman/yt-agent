@@ -27,12 +27,12 @@ func (s *SettingsStore) Get(ctx context.Context) (models.Settings, error) {
 // pointer means "leave as-is" — in particular, an empty API key field in the
 // UI must never silently wipe out a previously saved key.
 type SettingsPatch struct {
-	YouTubeAPIKey  *string
-	DeepSeekAPIKey *string
+	YouTubeAPIKey    *string
+	DeepSeekAPIKey   *string
 	OpenRouterAPIKey *string
-	AIProvider     *string
-	AIModel        *string
-	MaxVideos      *int
+	AIProvider       *string
+	AIModel          *string
+	MaxVideos        *int
 }
 
 func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models.Settings, error) {
