@@ -146,6 +146,14 @@ type chatRequest struct {
 	Messages       []chatMessage   `json:"messages"`
 	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 	MaxTokens      int             `json:"max_tokens,omitempty"`
+	// Stream is always sent explicitly false (no omitempty — Go's zero value
+	// for bool already is false, and it must actually appear in the JSON).
+	// DeepSeek and OpenRouter both treat an omitted "stream" as false, same
+	// as the OpenAI spec, but 9Router does not: leaving it out gets back a
+	// "text/event-stream" SSE response instead of one JSON object, which
+	// chatCompletions below can't parse — confirmed against a real running
+	// 9Router instance.
+	Stream bool `json:"stream"`
 }
 
 type responseFormat struct {
