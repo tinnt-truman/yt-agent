@@ -34,14 +34,20 @@ type Analysis struct {
 // Settings holds the app's single row of runtime configuration: API
 // credentials and analysis/AI tunables, editable from the config page.
 type Settings struct {
-	YouTubeAPIKey    string    `json:"-"`
-	DeepSeekAPIKey   string    `json:"-"`
-	OpenRouterAPIKey string    `json:"-"`
-	NineRouterAPIKey string    `json:"-"`
-	AIProvider       string    `json:"aiProvider"`
-	AIModel          string    `json:"aiModel"`
-	MaxVideos        int       `json:"maxVideos"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	YouTubeAPIKey    string `json:"-"`
+	DeepSeekAPIKey   string `json:"-"`
+	OpenRouterAPIKey string `json:"-"`
+	NineRouterAPIKey string `json:"-"`
+	// NineRouterBaseURL is not a secret (unlike the API keys above), so it's
+	// returned to the frontend as-is rather than masked. Empty means "use
+	// the default" — 9Router assumed to run on the same machine as this
+	// backend — resolved in ai.NewClientFromSettings, not here, so the zero
+	// value stays a plain empty string rather than a baked-in URL.
+	NineRouterBaseURL string    `json:"ninerouterBaseUrl"`
+	AIProvider        string    `json:"aiProvider"`
+	AIModel           string    `json:"aiModel"`
+	MaxVideos         int       `json:"maxVideos"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 // AIProviderResolved normalizes the provider, defaulting old rows to deepseek.

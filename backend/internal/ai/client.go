@@ -6,10 +6,11 @@
 //     model variants cost nothing via API (no credit card required, ~20
 //     req/min and ~200 req/day limits). OpenCode Zen's free tier is NOT used:
 //     it rejects API calls made outside the OpenCode client.
-//   - 9Router (https://github.com/decolua/9router), a self-hosted local
-//     router (npm install -g 9router) that fronts 40+ upstream providers
-//     behind one OpenAI-compatible endpoint at http://localhost:20128/v1 —
-//     assumes the YT-Agent backend and 9Router run on the same machine.
+//   - 9Router (https://github.com/decolua/9router), a self-hosted router
+//     (npm install -g 9router) that fronts 40+ upstream providers behind one
+//     OpenAI-compatible endpoint. Defaults to http://localhost:20128/v1
+//     (same machine as this backend) but Settings.NineRouterBaseURL can
+//     point at a different host.
 package ai
 
 import (
@@ -28,10 +29,24 @@ import (
 const (
 	deepseekBaseURL   = "https://api.deepseek.com"
 	openRouterBaseURL = "https://openrouter.ai/api/v1"
-	// nineRouterBaseURL points at 9Router's default local port — it has no
-	// public hosted URL, it's a process the user runs on their own machine.
-	nineRouterBaseURL = "http://localhost:20128/v1"
+	// nineRouterDefaultBaseURL is used when Settings.NineRouterBaseURL is
+	// blank — 9Router has no public hosted URL, it's a process the user runs
+	// themselves, most commonly on the same machine as this backend at its
+	// default port. A Settings-level override (see resolveNineRouterBaseURL)
+	// covers running it on a different host.
+	nineRouterDefaultBaseURL = "http://localhost:20128/v1"
 )
+
+// resolveNineRouterBaseURL falls back to the same-machine default when the
+// user hasn't set one, and trims a trailing slash from a custom one so it
+// composes cleanly with doPost's "/chat/completions" suffix.
+func resolveNineRouterBaseURL(configured string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(configured), "/")
+	if trimmed == "" {
+		return nineRouterDefaultBaseURL
+	}
+	return trimmed
+}
 
 type Client struct {
 	apiKey     string
@@ -99,7 +114,7 @@ func NewClientFromSettings(s models.Settings) *Client {
 		baseURL = openRouterBaseURL
 	case Provider9Router:
 		key = s.NineRouterAPIKey
-		baseURL = nineRouterBaseURL
+		baseURL = resolveNineRouterBaseURL(s.NineRouterBaseURL)
 	default:
 		key = s.DeepSeekAPIKey
 		baseURL = deepseekBaseURL

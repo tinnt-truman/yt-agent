@@ -161,6 +161,8 @@ export interface Settings {
   openrouterApiKeyPreview?: string
   ninerouterApiKeySet: boolean
   ninerouterApiKeyPreview?: string
+  /** Not a secret — the plain value, empty meaning "use the default" (http://localhost:20128/v1). */
+  ninerouterBaseUrl: string
   aiProvider: 'deepseek' | 'openrouter' | '9router'
   aiModel: string
   maxVideos: number
@@ -172,6 +174,8 @@ export interface UpdateSettingsRequest {
   deepseekApiKey?: string
   openrouterApiKey?: string
   ninerouterApiKey?: string
+  /** Not a secret. Send '' to reset to the default, unlike the *ApiKey fields where '' means "leave unchanged". */
+  ninerouterBaseUrl?: string
   aiProvider?: 'deepseek' | 'openrouter' | '9router'
   aiModel?: string
   maxVideos?: number

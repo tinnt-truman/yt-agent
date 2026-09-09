@@ -18,19 +18,23 @@ func NewSettingsHandler(settings *db.SettingsStore) *SettingsHandler {
 }
 
 type settingsResponse struct {
-	Configured              bool      `json:"configured"`
-	YouTubeAPIKeySet        bool      `json:"youtubeApiKeySet"`
-	YouTubeAPIKeyPreview    string    `json:"youtubeApiKeyPreview,omitempty"`
-	DeepSeekAPIKeySet       bool      `json:"deepseekApiKeySet"`
-	DeepSeekAPIKeyPreview   string    `json:"deepseekApiKeyPreview,omitempty"`
-	OpenRouterAPIKeySet     bool      `json:"openrouterApiKeySet"`
-	OpenRouterAPIKeyPreview string    `json:"openrouterApiKeyPreview,omitempty"`
-	NineRouterAPIKeySet     bool      `json:"ninerouterApiKeySet"`
-	NineRouterAPIKeyPreview string    `json:"ninerouterApiKeyPreview,omitempty"`
-	AIProvider              string    `json:"aiProvider"`
-	AIModel                 string    `json:"aiModel"`
-	MaxVideos               int       `json:"maxVideos"`
-	UpdatedAt               time.Time `json:"updatedAt"`
+	Configured              bool   `json:"configured"`
+	YouTubeAPIKeySet        bool   `json:"youtubeApiKeySet"`
+	YouTubeAPIKeyPreview    string `json:"youtubeApiKeyPreview,omitempty"`
+	DeepSeekAPIKeySet       bool   `json:"deepseekApiKeySet"`
+	DeepSeekAPIKeyPreview   string `json:"deepseekApiKeyPreview,omitempty"`
+	OpenRouterAPIKeySet     bool   `json:"openrouterApiKeySet"`
+	OpenRouterAPIKeyPreview string `json:"openrouterApiKeyPreview,omitempty"`
+	NineRouterAPIKeySet     bool   `json:"ninerouterApiKeySet"`
+	NineRouterAPIKeyPreview string `json:"ninerouterApiKeyPreview,omitempty"`
+	// NineRouterBaseURL is not a secret, so — unlike the *Set/*Preview pairs
+	// above — it's returned as the plain value, always present (possibly
+	// empty, meaning "use the default").
+	NineRouterBaseURL string    `json:"ninerouterBaseUrl"`
+	AIProvider        string    `json:"aiProvider"`
+	AIModel           string    `json:"aiModel"`
+	MaxVideos         int       `json:"maxVideos"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 func maskKey(key string) string {
@@ -48,11 +52,12 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := settingsResponse{
-		Configured: s.IsConfigured(),
-		AIProvider: s.AIProviderResolved(),
-		AIModel:    s.AIModel,
-		MaxVideos:  s.MaxVideos,
-		UpdatedAt:  s.UpdatedAt,
+		Configured:        s.IsConfigured(),
+		NineRouterBaseURL: s.NineRouterBaseURL,
+		AIProvider:        s.AIProviderResolved(),
+		AIModel:           s.AIModel,
+		MaxVideos:         s.MaxVideos,
+		UpdatedAt:         s.UpdatedAt,
 	}
 	if s.YouTubeAPIKey != "" {
 		resp.YouTubeAPIKeySet = true
@@ -74,13 +79,14 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateSettingsRequest struct {
-	YouTubeAPIKey    *string `json:"youtubeApiKey"`
-	DeepSeekAPIKey   *string `json:"deepseekApiKey"`
-	OpenRouterAPIKey *string `json:"openrouterApiKey"`
-	NineRouterAPIKey *string `json:"ninerouterApiKey"`
-	AIProvider       *string `json:"aiProvider"`
-	AIModel          *string `json:"aiModel"`
-	MaxVideos        *int    `json:"maxVideos"`
+	YouTubeAPIKey     *string `json:"youtubeApiKey"`
+	DeepSeekAPIKey    *string `json:"deepseekApiKey"`
+	OpenRouterAPIKey  *string `json:"openrouterApiKey"`
+	NineRouterAPIKey  *string `json:"ninerouterApiKey"`
+	NineRouterBaseURL *string `json:"ninerouterBaseUrl"`
+	AIProvider        *string `json:"aiProvider"`
+	AIModel           *string `json:"aiModel"`
+	MaxVideos         *int    `json:"maxVideos"`
 }
 
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +110,11 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	}
 	if req.NineRouterAPIKey != nil && *req.NineRouterAPIKey != "" {
 		patch.NineRouterAPIKey = req.NineRouterAPIKey
+	}
+	// Not a secret, so — unlike the key fields above — an empty string is a
+	// meaningful value here ("use the default") rather than "leave as-is".
+	if req.NineRouterBaseURL != nil {
+		patch.NineRouterBaseURL = req.NineRouterBaseURL
 	}
 	if req.AIProvider != nil && (*req.AIProvider == "deepseek" || *req.AIProvider == "openrouter" || *req.AIProvider == "9router") {
 		patch.AIProvider = req.AIProvider

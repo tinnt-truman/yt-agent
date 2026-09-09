@@ -45,6 +45,7 @@ export default function SettingsPage() {
   const [deepseekApiKey, setDeepseekApiKey] = useState('')
   const [openrouterApiKey, setOpenrouterApiKey] = useState('')
   const [ninerouterApiKey, setNinerouterApiKey] = useState('')
+  const [ninerouterBaseUrl, setNinerouterBaseUrl] = useState('')
   const [aiProvider, setAiProvider] = useState<AIProvider>('deepseek')
   const [aiModel, setAiModel] = useState('deepseek-v4-pro')
   const [customModel, setCustomModel] = useState('')
@@ -60,6 +61,7 @@ export default function SettingsPage() {
       const m = settings.aiModel || 'deepseek-v4-pro'
       setAiModel(KNOWN_MODELS.has(m) ? m : 'custom')
       setCustomModel(KNOWN_MODELS.has(m) ? '' : m)
+      setNinerouterBaseUrl(settings.ninerouterBaseUrl || '')
       setMaxVideos(settings.maxVideos || 50)
     }
   }, [settings])
@@ -88,6 +90,10 @@ export default function SettingsPage() {
         deepseekApiKey: deepseekApiKey || undefined,
         openrouterApiKey: openrouterApiKey || undefined,
         ninerouterApiKey: ninerouterApiKey || undefined,
+        // Not a secret, so — unlike the *ApiKey fields, where blank means
+        // "leave unchanged" — always send this: blank is itself meaningful
+        // ("use the default"), and must reach the backend to reset it.
+        ninerouterBaseUrl: ninerouterBaseUrl.trim(),
         // Use the provider the user actually selected in the dropdown, not
         // a guess from the model ID's shape — a custom 9Router model ID
         // ("cc/claude-opus-4-7") looks just like an OpenRouter one
@@ -213,22 +219,37 @@ export default function SettingsPage() {
         )}
 
         {aiProvider === '9router' && (
-          <Field
-            label="9Router API Key"
-            hint={
-              settings?.ninerouterApiKeySet
-                ? `Đã lưu (${settings.ninerouterApiKeyPreview}). Để trống nếu không muốn đổi.`
-                : 'Cài "npm install -g 9router", chạy "9router", mở dashboard tại localhost:20128 để lấy key và kết nối provider. YT-Agent gọi vào http://localhost:20128/v1 — cần chạy 9Router trên cùng máy với backend này.'
-            }
-          >
-            <input
-              type="password"
-              value={ninerouterApiKey}
-              onChange={(e) => setNinerouterApiKey(e.target.value)}
-              placeholder={settings?.ninerouterApiKeySet ? '••••••••' : 'dán key từ dashboard 9Router'}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
-            />
-          </Field>
+          <>
+            <Field
+              label="9Router API Key"
+              hint={
+                settings?.ninerouterApiKeySet
+                  ? `Đã lưu (${settings.ninerouterApiKeyPreview}). Để trống nếu không muốn đổi.`
+                  : 'Cài "npm install -g 9router", chạy "9router", mở dashboard để lấy key và kết nối provider.'
+              }
+            >
+              <input
+                type="password"
+                value={ninerouterApiKey}
+                onChange={(e) => setNinerouterApiKey(e.target.value)}
+                placeholder={settings?.ninerouterApiKeySet ? '••••••••' : 'dán key từ dashboard 9Router'}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+              />
+            </Field>
+
+            <Field
+              label="Base URL"
+              hint='Để trống = dùng mặc định "http://localhost:20128/v1" (9Router chạy cùng máy với backend). Nếu 9Router chạy máy khác, nhập địa chỉ tới đó, vd: http://192.168.1.50:20128/v1.'
+            >
+              <input
+                type="text"
+                value={ninerouterBaseUrl}
+                onChange={(e) => setNinerouterBaseUrl(e.target.value)}
+                placeholder="http://localhost:20128/v1"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+              />
+            </Field>
+          </>
         )}
 
         {aiProvider === '9router' ? (

@@ -51,11 +51,11 @@ biệt trong Postgres.
    - **9Router** ([github.com/decolua/9router](https://github.com/decolua/9router)):
      router AI tự host, chạy local (`npm install -g 9router && 9router`), gộp
      40+ provider (Claude Code, Kiro, GLM, Copilot...) sau một endpoint
-     OpenAI-compatible duy nhất. Backend YT-Agent gọi cố định vào
-     `http://localhost:20128/v1` nên **9Router phải chạy cùng máy** với
-     backend. Lấy API key và danh sách model đã kết nối (dạng
-     `provider/model`, vd `cc/claude-opus-4-7`) từ dashboard tại
-     `localhost:20128`, rồi dán vào `/config`.
+     OpenAI-compatible duy nhất. Mặc định gọi vào `http://localhost:20128/v1`
+     (cùng máy với backend) — nếu 9Router chạy máy khác, đổi "Base URL"
+     trên `/config` (hoặc env `NINEROUTER_BASE_URL`) sang địa chỉ đó. Lấy
+     API key và danh sách model đã kết nối (dạng `provider/model`, vd
+     `cc/claude-opus-4-7`) từ dashboard 9Router, rồi dán vào `/config`.
    - Không dùng OpenCode Zen free qua API: Zen chặn gọi ngoài OpenCode client
      (`OpenCode's free tier can only be used in OpenCode`).
 3. Go >= 1.22, Node >= 20, Docker (chạy Postgres).

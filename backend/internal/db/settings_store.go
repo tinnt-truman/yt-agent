@@ -18,8 +18,8 @@ func NewSettingsStore(db *sql.DB) *SettingsStore {
 func (s *SettingsStore) Get(ctx context.Context) (models.Settings, error) {
 	var out models.Settings
 	err := s.db.QueryRowContext(ctx,
-		`SELECT youtube_api_key, deepseek_api_key, openrouter_api_key, ninerouter_api_key, ai_provider, ai_model, max_videos, updated_at FROM settings WHERE id = 1`,
-	).Scan(&out.YouTubeAPIKey, &out.DeepSeekAPIKey, &out.OpenRouterAPIKey, &out.NineRouterAPIKey, &out.AIProvider, &out.AIModel, &out.MaxVideos, &out.UpdatedAt)
+		`SELECT youtube_api_key, deepseek_api_key, openrouter_api_key, ninerouter_api_key, ninerouter_base_url, ai_provider, ai_model, max_videos, updated_at FROM settings WHERE id = 1`,
+	).Scan(&out.YouTubeAPIKey, &out.DeepSeekAPIKey, &out.OpenRouterAPIKey, &out.NineRouterAPIKey, &out.NineRouterBaseURL, &out.AIProvider, &out.AIModel, &out.MaxVideos, &out.UpdatedAt)
 	return out, err
 }
 
@@ -27,13 +27,14 @@ func (s *SettingsStore) Get(ctx context.Context) (models.Settings, error) {
 // pointer means "leave as-is" — in particular, an empty API key field in the
 // UI must never silently wipe out a previously saved key.
 type SettingsPatch struct {
-	YouTubeAPIKey    *string
-	DeepSeekAPIKey   *string
-	OpenRouterAPIKey *string
-	NineRouterAPIKey *string
-	AIProvider       *string
-	AIModel          *string
-	MaxVideos        *int
+	YouTubeAPIKey     *string
+	DeepSeekAPIKey    *string
+	OpenRouterAPIKey  *string
+	NineRouterAPIKey  *string
+	NineRouterBaseURL *string
+	AIProvider        *string
+	AIModel           *string
+	MaxVideos         *int
 }
 
 func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models.Settings, error) {
@@ -54,6 +55,9 @@ func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models
 	if patch.NineRouterAPIKey != nil {
 		current.NineRouterAPIKey = *patch.NineRouterAPIKey
 	}
+	if patch.NineRouterBaseURL != nil {
+		current.NineRouterBaseURL = *patch.NineRouterBaseURL
+	}
 	if patch.AIProvider != nil {
 		current.AIProvider = *patch.AIProvider
 	}
@@ -65,8 +69,8 @@ func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models
 	}
 
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE settings SET youtube_api_key = $1, deepseek_api_key = $2, openrouter_api_key = $3, ninerouter_api_key = $4, ai_provider = $5, ai_model = $6, max_videos = $7, updated_at = now() WHERE id = 1`,
-		current.YouTubeAPIKey, current.DeepSeekAPIKey, current.OpenRouterAPIKey, current.NineRouterAPIKey, current.AIProvider, current.AIModel, current.MaxVideos,
+		`UPDATE settings SET youtube_api_key = $1, deepseek_api_key = $2, openrouter_api_key = $3, ninerouter_api_key = $4, ninerouter_base_url = $5, ai_provider = $6, ai_model = $7, max_videos = $8, updated_at = now() WHERE id = 1`,
+		current.YouTubeAPIKey, current.DeepSeekAPIKey, current.OpenRouterAPIKey, current.NineRouterAPIKey, current.NineRouterBaseURL, current.AIProvider, current.AIModel, current.MaxVideos,
 	)
 	if err != nil {
 		return models.Settings{}, err
@@ -77,7 +81,7 @@ func (s *SettingsStore) Update(ctx context.Context, patch SettingsPatch) (models
 // SeedFromEnv fills in empty credential/model fields from environment values
 // on first boot only — it never overwrites a value already saved via the
 // config page.
-func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, deepSeekKey, openRouterKey, nineRouterKey, aiProvider, aiModel string, maxVideos int) error {
+func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, deepSeekKey, openRouterKey, nineRouterKey, nineRouterBaseURL, aiProvider, aiModel string, maxVideos int) error {
 	current, err := s.Get(ctx)
 	if err != nil {
 		return err
@@ -96,6 +100,9 @@ func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, deepSeekKey
 	if current.NineRouterAPIKey == "" && nineRouterKey != "" {
 		patch.NineRouterAPIKey = &nineRouterKey
 	}
+	if current.NineRouterBaseURL == "" && nineRouterBaseURL != "" {
+		patch.NineRouterBaseURL = &nineRouterBaseURL
+	}
 	if current.AIProvider == "" && aiProvider != "" {
 		patch.AIProvider = &aiProvider
 	}
@@ -105,7 +112,7 @@ func (s *SettingsStore) SeedFromEnv(ctx context.Context, youtubeKey, deepSeekKey
 	if current.MaxVideos == 0 && maxVideos != 0 {
 		patch.MaxVideos = &maxVideos
 	}
-	if patch.YouTubeAPIKey == nil && patch.DeepSeekAPIKey == nil && patch.OpenRouterAPIKey == nil && patch.NineRouterAPIKey == nil && patch.AIProvider == nil && patch.AIModel == nil && patch.MaxVideos == nil {
+	if patch.YouTubeAPIKey == nil && patch.DeepSeekAPIKey == nil && patch.OpenRouterAPIKey == nil && patch.NineRouterAPIKey == nil && patch.NineRouterBaseURL == nil && patch.AIProvider == nil && patch.AIModel == nil && patch.MaxVideos == nil {
 		return nil
 	}
 
