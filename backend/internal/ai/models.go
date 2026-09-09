@@ -3,6 +3,7 @@ package ai
 const (
 	ProviderDeepSeek   = "deepseek"
 	ProviderOpenRouter = "openrouter"
+	Provider9Router    = "9router"
 
 	EndpointChat      = "chat"
 	EndpointResponses = "responses"

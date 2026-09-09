@@ -32,6 +32,7 @@ type Config struct {
 	SeedYouTubeAPIKey    string
 	SeedDeepSeekAPIKey   string
 	SeedOpenRouterAPIKey string
+	SeedNineRouterAPIKey string
 	SeedAIProvider       string
 	SeedAIModel          string
 	SeedMaxVideos        int
@@ -60,6 +61,7 @@ func Load() (*Config, error) {
 		SeedYouTubeAPIKey:    os.Getenv("YOUTUBE_API_KEY"),
 		SeedDeepSeekAPIKey:   os.Getenv("DEEPSEEK_API_KEY"),
 		SeedOpenRouterAPIKey: firstNonEmpty(os.Getenv("OPENROUTER_API_KEY"), os.Getenv("OPENCODE_API_KEY")),
+		SeedNineRouterAPIKey: os.Getenv("NINEROUTER_API_KEY"),
 		SeedAIProvider:       getEnv("AI_PROVIDER", ""),
 		SeedAIModel:          getEnv("AI_MODEL", "deepseek-v4-pro"),
 		SeedMaxVideos:        50,

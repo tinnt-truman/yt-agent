@@ -159,7 +159,9 @@ export interface Settings {
   deepseekApiKeyPreview?: string
   openrouterApiKeySet: boolean
   openrouterApiKeyPreview?: string
-  aiProvider: 'deepseek' | 'openrouter'
+  ninerouterApiKeySet: boolean
+  ninerouterApiKeyPreview?: string
+  aiProvider: 'deepseek' | 'openrouter' | '9router'
   aiModel: string
   maxVideos: number
   updatedAt: string
@@ -169,7 +171,8 @@ export interface UpdateSettingsRequest {
   youtubeApiKey?: string
   deepseekApiKey?: string
   openrouterApiKey?: string
-  aiProvider?: 'deepseek' | 'openrouter'
+  ninerouterApiKey?: string
+  aiProvider?: 'deepseek' | 'openrouter' | '9router'
   aiModel?: string
   maxVideos?: number
 }
@@ -285,13 +288,27 @@ export interface VideoPromptSeriesRequest {
   description?: string
   tags?: string[]
   episodeCount?: number
+  scenesPerEpisode?: number
+}
+
+export interface VideoPromptScene {
+  sceneNumber: number
+  setting: string
+  characters: string[]
+  shotType: string
+  action: string
+  prompt: string
 }
 
 export interface VideoPromptEpisode {
   episodeNumber: number
   title: string
   plotSummary: string
-  prompt: string
+  // Scenes is the current shape (one prompt per scene). `prompt` is kept
+  // optional for series generated before the scene breakdown existed —
+  // those rows only ever had one flat prompt per episode.
+  scenes?: VideoPromptScene[]
+  prompt?: string
   negativePrompt?: string
 }
 
@@ -320,6 +337,7 @@ export interface VideoPromptSeriesJob {
   videoDescription?: string
   videoTags?: string[]
   episodeCount: number
+  scenesPerEpisode: number
   status: VideoPromptSeriesJobStatus
   errorMessage?: string
   series?: VideoPromptSeries

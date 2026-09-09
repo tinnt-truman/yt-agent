@@ -182,7 +182,7 @@ export default function VideoPromptSeriesPage() {
 
                 <div>
                   <p className="text-xs font-medium text-slate-500">
-                    Nhân vật — dán "Ngoại hình" kèm mỗi tập để giữ hình ảnh đồng nhất
+                    Nhân vật — dán "Ngoại hình" kèm mỗi cảnh để giữ hình ảnh đồng nhất
                   </p>
                   <div className="mt-1.5 space-y-2">
                     {selected.series.characters.map((char) => (
@@ -229,27 +229,65 @@ export default function VideoPromptSeriesPage() {
                     <p className="mt-1 text-sm text-slate-800">{selected.series.style}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Độ dài mỗi tập</p>
+                    <p className="text-xs font-medium text-slate-500">Độ dài mỗi cảnh</p>
                     <p className="mt-1 text-sm text-slate-800">{selected.series.durationHint}</p>
                   </div>
                 </div>
 
-                <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="space-y-3 border-t border-slate-100 pt-3">
                   {selected.series.episodes.map((ep) => (
                     <div key={ep.episodeNumber} className="rounded-md border border-slate-100 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-semibold text-violet-700">
-                          Tập {ep.episodeNumber}: {ep.title}
-                        </p>
-                        <CopyButton text={ep.prompt} label="Copy prompt" />
-                      </div>
-                      <p className="mt-1 text-xs leading-relaxed text-slate-600">{ep.plotSummary}</p>
-                      <p className="mt-1.5 rounded bg-slate-50 p-2 font-mono text-[11px] leading-relaxed text-slate-800">
-                        {ep.prompt}
+                      <p className="text-xs font-semibold text-violet-700">
+                        Tập {ep.episodeNumber}: {ep.title}
                       </p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">{ep.plotSummary}</p>
+
+                      {!ep.scenes?.length && ep.prompt && (
+                        <>
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-medium text-slate-500">Prompt (English)</p>
+                            <CopyButton text={ep.prompt} label="Copy" />
+                          </div>
+                          <p className="mt-1 rounded bg-slate-50 p-2 font-mono text-[11px] leading-relaxed text-slate-800">
+                            {ep.prompt}
+                          </p>
+                        </>
+                      )}
+
+                      <div className="mt-2 space-y-2">
+                        {(ep.scenes ?? []).map((scene) => (
+                          <div
+                            key={scene.sceneNumber}
+                            className="rounded border border-slate-100 bg-slate-50/60 p-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-medium text-slate-500">
+                                Cảnh {scene.sceneNumber} · {scene.setting}
+                              </p>
+                              <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                                {scene.shotType}
+                              </span>
+                            </div>
+                            {scene.characters.length > 0 && (
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                Nhân vật: {scene.characters.join(', ')}
+                              </p>
+                            )}
+                            <p className="mt-1 text-xs leading-relaxed text-slate-700">{scene.action}</p>
+                            <div className="mt-1.5 flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-medium text-slate-500">Prompt (English)</p>
+                              <CopyButton text={scene.prompt} label="Copy" />
+                            </div>
+                            <p className="mt-1 rounded bg-white p-2 font-mono text-[11px] leading-relaxed text-slate-800">
+                              {scene.prompt}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
                       {ep.negativePrompt && (
-                        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                          Negative: {ep.negativePrompt}
+                        <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                          Negative (cả tập): {ep.negativePrompt}
                         </p>
                       )}
                     </div>

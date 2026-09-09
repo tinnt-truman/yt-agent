@@ -61,10 +61,11 @@ func (h *VideoPromptHandler) GeneratePrompt(w http.ResponseWriter, r *http.Reque
 }
 
 type createVideoPromptSeriesRequest struct {
-	Title        string   `json:"title"`
-	Description  string   `json:"description,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	EpisodeCount int      `json:"episodeCount,omitempty"`
+	Title            string   `json:"title"`
+	Description      string   `json:"description,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	EpisodeCount     int      `json:"episodeCount,omitempty"`
+	ScenesPerEpisode int      `json:"scenesPerEpisode,omitempty"`
 }
 
 // CreateVideoPromptSeries queues a new multi-episode-story job and returns
@@ -83,13 +84,7 @@ func (h *VideoPromptHandler) CreateVideoPromptSeries(w http.ResponseWriter, r *h
 		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
-	episodeCount := req.EpisodeCount
-	if episodeCount <= 0 {
-		episodeCount = 5
-	}
-	if episodeCount > 10 {
-		episodeCount = 10
-	}
+	episodeCount, scenesPerEpisode := ai.ClampVideoPromptSeriesDimensions(req.EpisodeCount, req.ScenesPerEpisode)
 
 	settings, err := h.settings.Get(r.Context())
 	if err != nil {
@@ -101,7 +96,7 @@ func (h *VideoPromptHandler) CreateVideoPromptSeries(w http.ResponseWriter, r *h
 		return
 	}
 
-	id, err := h.series.Create(r.Context(), req.Title, req.Description, req.Tags, episodeCount)
+	id, err := h.series.Create(r.Context(), req.Title, req.Description, req.Tags, episodeCount, scenesPerEpisode)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not create video prompt series job")
 		return
@@ -182,10 +177,11 @@ func (h *VideoPromptHandler) runSeriesGeneration(ctx context.Context, job *model
 
 	aiClient := ai.NewClientFromSettings(settings)
 	series, err := aiClient.GenerateVideoPromptSeries(ctx, models.VideoPromptSeriesRequest{
-		Title:        job.VideoTitle,
-		Description:  job.VideoDescription,
-		Tags:         job.VideoTags,
-		EpisodeCount: job.EpisodeCount,
+		Title:            job.VideoTitle,
+		Description:      job.VideoDescription,
+		Tags:             job.VideoTags,
+		EpisodeCount:     job.EpisodeCount,
+		ScenesPerEpisode: job.ScenesPerEpisode,
 	})
 	if err != nil {
 		_ = h.series.SetFailed(ctx, job.ID, err.Error())

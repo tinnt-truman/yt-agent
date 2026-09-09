@@ -30,7 +30,7 @@ func main() {
 	scriptStore := db.NewScriptStore(database)
 	videoPromptSeriesStore := db.NewVideoPromptSeriesStore(database)
 
-	if err := settingsStore.SeedFromEnv(ctx, cfg.SeedYouTubeAPIKey, cfg.SeedDeepSeekAPIKey, cfg.SeedOpenRouterAPIKey, cfg.SeedAIProvider, cfg.SeedAIModel, cfg.SeedMaxVideos); err != nil {
+	if err := settingsStore.SeedFromEnv(ctx, cfg.SeedYouTubeAPIKey, cfg.SeedDeepSeekAPIKey, cfg.SeedOpenRouterAPIKey, cfg.SeedNineRouterAPIKey, cfg.SeedAIProvider, cfg.SeedAIModel, cfg.SeedMaxVideos); err != nil {
 		log.Fatalf("settings seed error: %v", err)
 	}
 

@@ -37,6 +37,7 @@ type Settings struct {
 	YouTubeAPIKey    string    `json:"-"`
 	DeepSeekAPIKey   string    `json:"-"`
 	OpenRouterAPIKey string    `json:"-"`
+	NineRouterAPIKey string    `json:"-"`
 	AIProvider       string    `json:"aiProvider"`
 	AIModel          string    `json:"aiModel"`
 	MaxVideos        int       `json:"maxVideos"`
@@ -45,18 +46,26 @@ type Settings struct {
 
 // AIProviderResolved normalizes the provider, defaulting old rows to deepseek.
 func (s Settings) AIProviderResolved() string {
-	if s.AIProvider == "openrouter" {
+	switch s.AIProvider {
+	case "openrouter":
 		return "openrouter"
+	case "9router":
+		return "9router"
+	default:
+		return "deepseek"
 	}
-	return "deepseek"
 }
 
 // ActiveAIKey returns the API key for the currently selected provider.
 func (s Settings) ActiveAIKey() string {
-	if s.AIProviderResolved() == "openrouter" {
+	switch s.AIProviderResolved() {
+	case "openrouter":
 		return s.OpenRouterAPIKey
+	case "9router":
+		return s.NineRouterAPIKey
+	default:
+		return s.DeepSeekAPIKey
 	}
-	return s.DeepSeekAPIKey
 }
 
 // IsConfigured reports whether YouTube plus the active AI provider's key
@@ -310,25 +319,43 @@ type VideoPrompt struct {
 }
 
 // VideoPromptSeriesRequest carries the metadata of one existing video plus
-// how many episodes to break the new, original story into.
+// how many episodes to break the new, original story into, and how many
+// scenes make up each episode.
 type VideoPromptSeriesRequest struct {
-	Title        string   `json:"title"`
-	Description  string   `json:"description,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	EpisodeCount int      `json:"episodeCount,omitempty"`
+	Title            string   `json:"title"`
+	Description      string   `json:"description,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	EpisodeCount     int      `json:"episodeCount,omitempty"`
+	ScenesPerEpisode int      `json:"scenesPerEpisode,omitempty"`
 }
 
-// VideoPromptEpisode is one episode's text-to-video prompt within a
-// multi-episode story. Each episode is meant to become its own
+// VideoPromptScene is one shot-level beat within an episode, modeled on a
+// professional shooting script: a time/location setting, who's present, a
+// shot type (wide/medium/close-up/action/cutaway), the action or dialogue
+// that happens, and the resulting text-to-video prompt for that beat. Each
+// scene is meant to become its own separately-generated video clip — an
+// episode is told as a short sequence of these clips, not one single prompt.
+type VideoPromptScene struct {
+	SceneNumber int      `json:"sceneNumber"`
+	Setting     string   `json:"setting"` // vd: "Sáng · Ngoại cảnh · Cổng làng biên giới"
+	Characters  []string `json:"characters"`
+	ShotType    string   `json:"shotType"` // vd: "Toàn cảnh", "Trung cảnh", "Cận cảnh", "Hành động", "Không gian trống"
+	Action      string   `json:"action"`   // tiếng Việt: hành động/thoại chính diễn ra trong cảnh
+	Prompt      string   `json:"prompt"`   // tiếng Anh: text-to-video prompt cho khung hình quan trọng nhất của cảnh
+}
+
+// VideoPromptEpisode is one episode of a multi-episode story, broken into a
+// short sequence of Scenes. Each episode is meant to become its own
 // separately-generated, separately-uploaded video (Tập 1, Tập 2, ...) —
 // current text-to-video tools only produce short clips per call, so a
-// longer serialized story is told across several of them rather than one.
+// longer serialized story is told across several of them, and each episode
+// itself is told across a few scene-level clips rather than a single prompt.
 type VideoPromptEpisode struct {
-	EpisodeNumber  int    `json:"episodeNumber"`
-	Title          string `json:"title"`
-	PlotSummary    string `json:"plotSummary"`
-	Prompt         string `json:"prompt"`
-	NegativePrompt string `json:"negativePrompt,omitempty"`
+	EpisodeNumber  int                `json:"episodeNumber"`
+	Title          string             `json:"title"`
+	PlotSummary    string             `json:"plotSummary"`
+	Scenes         []VideoPromptScene `json:"scenes"`
+	NegativePrompt string             `json:"negativePrompt,omitempty"`
 }
 
 // Character is one recurring character in a multi-episode story. Appearance
@@ -377,6 +404,7 @@ type VideoPromptSeriesJob struct {
 	VideoDescription string                     `json:"videoDescription,omitempty"`
 	VideoTags        []string                   `json:"videoTags,omitempty"`
 	EpisodeCount     int                        `json:"episodeCount"`
+	ScenesPerEpisode int                        `json:"scenesPerEpisode"`
 	Status           VideoPromptSeriesJobStatus `json:"status"`
 	ErrorMessage     string                     `json:"errorMessage,omitempty"`
 	SeriesJSON       json.RawMessage            `json:"series,omitempty"`

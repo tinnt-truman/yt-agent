@@ -17,7 +17,7 @@ func NewVideoPromptSeriesStore(db *sql.DB) *VideoPromptSeriesStore {
 }
 
 func (s *VideoPromptSeriesStore) Create(
-	ctx context.Context, title, description string, tags []string, episodeCount int,
+	ctx context.Context, title, description string, tags []string, episodeCount, scenesPerEpisode int,
 ) (string, error) {
 	var tagsJSON []byte
 	if len(tags) > 0 {
@@ -30,9 +30,9 @@ func (s *VideoPromptSeriesStore) Create(
 
 	var id string
 	err := s.db.QueryRowContext(ctx,
-		`INSERT INTO video_prompt_series (video_title, video_description, video_tags, episode_count, status)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		title, description, tagsJSON, episodeCount, models.VideoPromptSeriesStatusPending,
+		`INSERT INTO video_prompt_series (video_title, video_description, video_tags, episode_count, scenes_per_episode, status)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		title, description, tagsJSON, episodeCount, scenesPerEpisode, models.VideoPromptSeriesStatusPending,
 	).Scan(&id)
 	return id, err
 }
@@ -79,10 +79,10 @@ func (s *VideoPromptSeriesStore) GetByID(ctx context.Context, id string) (*model
 	var tagsJSON, seriesJSON []byte
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, video_title, video_description, video_tags, episode_count, status, error_message,
+		`SELECT id, video_title, video_description, video_tags, episode_count, scenes_per_episode, status, error_message,
 		        series_json, created_at, updated_at
 		 FROM video_prompt_series WHERE id = $1`, id,
-	).Scan(&j.ID, &j.VideoTitle, &description, &tagsJSON, &j.EpisodeCount, &j.Status, &errorMessage,
+	).Scan(&j.ID, &j.VideoTitle, &description, &tagsJSON, &j.EpisodeCount, &j.ScenesPerEpisode, &j.Status, &errorMessage,
 		&seriesJSON, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (s *VideoPromptSeriesStore) GetByID(ctx context.Context, id string) (*model
 // second round-trip per item.
 func (s *VideoPromptSeriesStore) ListRecent(ctx context.Context, limit int) ([]models.VideoPromptSeriesJob, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, video_title, video_description, video_tags, episode_count, status, error_message,
+		`SELECT id, video_title, video_description, video_tags, episode_count, scenes_per_episode, status, error_message,
 		        series_json, created_at, updated_at
 		 FROM video_prompt_series ORDER BY created_at DESC LIMIT $1`, limit,
 	)
@@ -117,7 +117,7 @@ func (s *VideoPromptSeriesStore) ListRecent(ctx context.Context, limit int) ([]m
 		var j models.VideoPromptSeriesJob
 		var description, errorMessage sql.NullString
 		var tagsJSON, seriesJSON []byte
-		if err := rows.Scan(&j.ID, &j.VideoTitle, &description, &tagsJSON, &j.EpisodeCount, &j.Status,
+		if err := rows.Scan(&j.ID, &j.VideoTitle, &description, &tagsJSON, &j.EpisodeCount, &j.ScenesPerEpisode, &j.Status,
 			&errorMessage, &seriesJSON, &j.CreatedAt, &j.UpdatedAt); err != nil {
 			return nil, err
 		}

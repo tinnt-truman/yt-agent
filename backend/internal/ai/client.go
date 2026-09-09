@@ -1,11 +1,15 @@
 // Package ai turns a deterministic channel analysis into an AI-generated
-// content strategy for a new, "biến tấu" (variation) channel. It speaks two
-// OpenAI-compatible backends, selected per job from the settings row:
+// content strategy for a new, "biến tấu" (variation) channel. It speaks
+// three OpenAI-compatible backends, selected per job from the settings row:
 //   - DeepSeek (https://api.deepseek.com/chat/completions) with JSON mode.
 //   - OpenRouter (https://openrouter.ai/api/v1/chat/completions), whose :free
 //     model variants cost nothing via API (no credit card required, ~20
 //     req/min and ~200 req/day limits). OpenCode Zen's free tier is NOT used:
 //     it rejects API calls made outside the OpenCode client.
+//   - 9Router (https://github.com/decolua/9router), a self-hosted local
+//     router (npm install -g 9router) that fronts 40+ upstream providers
+//     behind one OpenAI-compatible endpoint at http://localhost:20128/v1 —
+//     assumes the YT-Agent backend and 9Router run on the same machine.
 package ai
 
 import (
@@ -24,6 +28,9 @@ import (
 const (
 	deepseekBaseURL   = "https://api.deepseek.com"
 	openRouterBaseURL = "https://openrouter.ai/api/v1"
+	// nineRouterBaseURL points at 9Router's default local port — it has no
+	// public hosted URL, it's a process the user runs on their own machine.
+	nineRouterBaseURL = "http://localhost:20128/v1"
 )
 
 type Client struct {
@@ -68,18 +75,34 @@ func NewClientFromSettings(s models.Settings) *Client {
 	if model == "" {
 		model = "deepseek-v4-pro"
 	}
-	// Preset models and OpenRouter-shaped custom IDs ("author/slug", ":free")
-	// carry their own backend signal; a plain custom ID honors the explicit
-	// provider setting instead.
-	provider := ProviderForModel(model)
-	if !InCatalog(model) && !containsSlash(model) && !endsWithFree(model) {
-		provider = s.AIProviderResolved()
+	provider := s.AIProviderResolved()
+	switch {
+	case InCatalog(model):
+		// A catalog preset carries its own fixed backend signal.
+		provider = ProviderForModel(model)
+	case provider == ProviderDeepSeek && (containsSlash(model) || endsWithFree(model)):
+		// A custom "author/slug" or "...:free" ID pasted in while the
+		// provider setting is still the (deepseek) default is assumed to be
+		// an OpenRouter model — keeps older setups (env-seeded, or pasted
+		// before an explicit provider toggle existed) working without
+		// requiring the provider field too. An explicitly chosen provider
+		// (including 9router, whose custom IDs look the same shape — e.g.
+		// "cc/claude-opus-4-7" — but aren't OpenRouter) always wins over
+		// this guess, since it no longer resolves to the deepseek default.
+		provider = ProviderOpenRouter
 	}
-	key := s.DeepSeekAPIKey
-	baseURL := deepseekBaseURL
-	if provider == ProviderOpenRouter {
+
+	var key, baseURL string
+	switch provider {
+	case ProviderOpenRouter:
 		key = s.OpenRouterAPIKey
 		baseURL = openRouterBaseURL
+	case Provider9Router:
+		key = s.NineRouterAPIKey
+		baseURL = nineRouterBaseURL
+	default:
+		key = s.DeepSeekAPIKey
+		baseURL = deepseekBaseURL
 	}
 	return &Client{
 		apiKey:   key,
@@ -271,17 +294,27 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 
 const videoPromptSeriesSystemPromptTemplate = `Bạn là biên kịch kiêm đạo diễn cho phim ngắn nhiều tập tạo bằng AI text-to-video (Kling, Google Flow, Runway, Sora...). Bạn sẽ nhận thông tin (tiêu đề, mô tả, tag) của MỘT video YouTube tham khảo. Nhiệm vụ: sáng tác một câu chuyện MỚI, có cốt truyện rõ ràng, chia thành đúng %d tập — LẤY CẢM HỨNG từ chủ đề/không khí của video tham khảo nhưng KHÔNG sao chép cốt truyện, nhân vật hay chi tiết cụ thể của video/bộ phim gốc.
 
-Các công cụ AI tạo video hiện tại chỉ tạo được clip ngắn mỗi lần (vài giây đến khoảng một phút), nên câu chuyện dài được kể bằng cách tạo NHIỀU video riêng biệt (Tập 1, Tập 2, ...), mỗi tập một prompt riêng — không phải một prompt duy nhất cho cả bộ phim.
+Các công cụ AI tạo video hiện tại chỉ tạo được clip ngắn mỗi lần (vài giây đến khoảng một phút), nên câu chuyện dài được kể bằng cách tạo NHIỀU video riêng biệt (Tập 1, Tập 2, ...). Bên trong mỗi tập, hãy viết theo phong cách kịch bản quay chuyên nghiệp (shooting script): chia tập đó thành đúng %d CẢNH nối tiếp nhau — mỗi cảnh là một đơn vị bối cảnh/thời gian riêng và sẽ được tạo thành một clip video riêng.
 
 Hãy xây dựng 2-4 NHÂN VẬT xuyên suốt câu chuyện (nhân vật chính, phản diện, phụ nếu cần), mỗi nhân vật gồm:
 - "name": tên nhân vật
 - "role": loại nhân vật (vd: "Nhân vật chính diện", "Phản diện", "Nhân vật phụ")
-- "appearance": mô tả ngoại hình/trang phục bằng TIẾNG ANH, đủ chi tiết để dán vào prompt text-to-video ở mỗi tập nhằm giữ hình ảnh nhân vật nhất quán giữa các tập
+- "appearance": mô tả ngoại hình/trang phục bằng TIẾNG ANH, đủ chi tiết để dán vào prompt text-to-video ở mỗi cảnh nhằm giữ hình ảnh nhân vật nhất quán giữa các tập
 - "coreTags": 3-5 từ khoá ngắn gọn (tiếng Việt) mô tả cốt lõi nhân vật (vd: "kiêu ngạo", "trung thành", "bí ẩn")
 - "personalInfo": thông tin cá nhân ngắn gọn (tiếng Việt): tuổi, thân phận, nghề nghiệp/vai trò trong câu chuyện
 - "personality": đặc điểm tính cách (tiếng Việt, 1-2 câu)
 
-Mỗi tập cần: tiêu đề ngắn, tóm tắt cốt truyện của tập đó (tiếng Việt, 1-2 câu, nối tiếp mạch truyện xuyên suốt), và một prompt text-to-video (tiếng Anh, mô tả cụ thể chủ thể/hành động/bối cảnh/ánh sáng/chuyển động máy quay cho cảnh quan trọng nhất của tập đó, không quá 80 từ — nhắc tên/ngoại hình nhân vật xuất hiện trong cảnh để khớp với "appearance" đã mô tả).
+Mỗi tập cần: tiêu đề ngắn, tóm tắt cốt truyện của tập đó (tiếng Việt, 1-2 câu, nối tiếp mạch truyện xuyên suốt), một "negativePrompt" dùng chung cho cả tập (tiếng Anh, những gì cần tránh — vd: text, watermark, blurry, distorted faces), và đúng %d cảnh.
+
+Mỗi cảnh gồm:
+- "sceneNumber": số thứ tự cảnh trong tập, bắt đầu từ 1
+- "setting": tiếng Việt, thời điểm + nội/ngoại cảnh + địa điểm, ngắn gọn (vd: "Sáng · Ngoại cảnh · Cổng làng biên giới")
+- "characters": mảng tên nhân vật (khớp với "name" trong danh sách nhân vật) xuất hiện trong cảnh
+- "shotType": chọn MỘT trong: "Toàn cảnh", "Trung cảnh", "Cận cảnh", "Hành động", "Không gian trống" — loại khung hình chủ đạo của cảnh (cảnh cuối mỗi tập nên ưu tiên "Không gian trống": một khung hình khí quyển không thoại, dùng để chuyển cảnh/kết tập gây tò mò)
+- "action": tiếng Việt, mô tả ngắn gọn hành động chính và/hoặc câu thoại quan trọng nhất diễn ra trong cảnh (1 câu)
+- "prompt": tiếng Anh, mô tả cụ thể chủ thể/hành động/bối cảnh/ánh sáng/chuyển động máy quay cho khung hình quan trọng nhất của cảnh, không quá 45 từ — nhắc tên/ngoại hình nhân vật xuất hiện trong cảnh để khớp với "appearance" đã mô tả
+
+Các cảnh trong một tập phải nối tiếp nhau mạch lạc và dựng lên cao trào của tập đó; tập sau phải nối tiếp logic từ tập trước, không lặp lại tình tiết.
 
 Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
 
@@ -291,11 +324,51 @@ Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không 
     {"name": "string", "role": "string", "appearance": "string (tiếng Anh)", "coreTags": ["string", "..."], "personalInfo": "string", "personality": "string"}
   ],
   "style": "string, tiếng Việt, phong cách hình ảnh chung cho cả series",
-  "durationHint": "string, tiếng Việt, độ dài gợi ý cho mỗi tập",
+  "durationHint": "string, tiếng Việt, độ dài gợi ý cho mỗi cảnh",
   "episodes": [
-    {"episodeNumber": 1, "title": "string", "plotSummary": "string", "prompt": "string", "negativePrompt": "string"}
+    {
+      "episodeNumber": 1,
+      "title": "string",
+      "plotSummary": "string",
+      "negativePrompt": "string (tiếng Anh)",
+      "scenes": [
+        {"sceneNumber": 1, "setting": "string", "characters": ["string", "..."], "shotType": "string", "action": "string", "prompt": "string (tiếng Anh)"}
+      ]
+    }
   ]
 }`
+
+// ClampVideoPromptSeriesDimensions bounds the requested episode count and
+// scenes-per-episode to keep the generated JSON within the completion-token
+// budget (see videoPromptSeriesMaxTokens): each dimension is bounded
+// individually, and their product (total scenes, each with its own
+// setting/characters/shotType/action/prompt) is capped separately since the
+// two multiply together in output size. Exported so the API handler can
+// clamp before persisting the job, keeping the stored ScenesPerEpisode
+// consistent with what generation actually used (so a retry reproduces the
+// same shape).
+func ClampVideoPromptSeriesDimensions(episodeCount, scenesPerEpisode int) (int, int) {
+	if episodeCount <= 0 {
+		episodeCount = 5
+	}
+	if episodeCount > 10 {
+		episodeCount = 10
+	}
+	if scenesPerEpisode <= 0 {
+		scenesPerEpisode = 3
+	}
+	if scenesPerEpisode > 5 {
+		scenesPerEpisode = 5
+	}
+	const maxTotalScenes = 30
+	if episodeCount*scenesPerEpisode > maxTotalScenes {
+		scenesPerEpisode = maxTotalScenes / episodeCount
+		if scenesPerEpisode < 2 {
+			scenesPerEpisode = 2
+		}
+	}
+	return episodeCount, scenesPerEpisode
+}
 
 // GenerateVideoPromptSeries writes an ORIGINAL multi-episode story inspired
 // by one reference video's topic/mood, broken into per-episode text-to-video
@@ -303,21 +376,16 @@ Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không 
 // a single prompt for one short clip, this is for a longer serialized story
 // told across several separately-generated episode videos.
 func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.VideoPromptSeriesRequest) (*models.VideoPromptSeries, error) {
-	episodeCount := req.EpisodeCount
-	if episodeCount <= 0 {
-		episodeCount = 5
-	}
-	if episodeCount > 10 {
-		episodeCount = 10
-	}
+	episodeCount, scenesPerEpisode := ClampVideoPromptSeriesDimensions(req.EpisodeCount, req.ScenesPerEpisode)
 	req.EpisodeCount = episodeCount
+	req.ScenesPerEpisode = scenesPerEpisode
 
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal video series request: %w", err)
 	}
 
-	systemPrompt := fmt.Sprintf(videoPromptSeriesSystemPromptTemplate, episodeCount)
+	systemPrompt := fmt.Sprintf(videoPromptSeriesSystemPromptTemplate, episodeCount, scenesPerEpisode, scenesPerEpisode)
 	reqBody := chatRequest{
 		Model: c.model,
 		Messages: []chatMessage{
@@ -325,7 +393,7 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
 		},
 		ResponseFormat: c.jsonMode(),
-		MaxTokens:      videoPromptSeriesMaxTokens(episodeCount),
+		MaxTokens:      videoPromptSeriesMaxTokens(episodeCount, scenesPerEpisode),
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -341,13 +409,20 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 }
 
 // videoPromptSeriesMaxTokens sizes the output budget for a multi-episode
-// series: a 2-4 character cast (~150-250 tokens each) plus per-episode
-// title/plotSummary/prompt/negativePrompt, generously margined because
-// Vietnamese text tokenizes less efficiently than English (diacritics often
-// split into multiple subword tokens) and DeepSeek tends to run verbose.
-// Capped at 8000 to stay clear of common provider completion-token ceilings.
-func videoPromptSeriesMaxTokens(episodeCount int) int {
-	tokens := 3000 + episodeCount*600
+// series: a 2-4 character cast (~150-250 tokens each) plus, per episode, a
+// small title/plotSummary/negativePrompt and, per scene (bounded to at most
+// 30 total across the series — see ClampVideoPromptSeriesDimensions), a
+// setting/characters/shotType/action/prompt (the English prompt is capped at
+// 45 words, ~60 tokens, specifically so more scenes fit this budget — see
+// the system prompt template). Margined generously because Vietnamese text
+// tokenizes less efficiently than English (diacritics often split into
+// multiple subword tokens) and DeepSeek tends to run verbose. The 30-scene
+// cap keeps this comfortably under 8000 even in the worst case, so this
+// isn't expected to saturate the ceiling the way a naive per-episode formula
+// would for a large episodeCount x scenesPerEpisode request.
+func videoPromptSeriesMaxTokens(episodeCount, scenesPerEpisode int) int {
+	totalScenes := episodeCount * scenesPerEpisode
+	tokens := 1200 + episodeCount*100 + totalScenes*170
 	if tokens > 8000 {
 		tokens = 8000
 	}

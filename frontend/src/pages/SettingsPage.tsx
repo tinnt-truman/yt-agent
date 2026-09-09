@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { updateSettings } from '../api/client'
 import { useSettingsContext } from '../context/SettingsContext'
 
-type AIProvider = 'deepseek' | 'openrouter'
+type AIProvider = 'deepseek' | 'openrouter' | '9router'
 
 const MODEL_GROUPS: { provider: AIProvider; label: string; models: { value: string; label: string }[] }[] = [
   {
@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [youtubeApiKey, setYoutubeApiKey] = useState('')
   const [deepseekApiKey, setDeepseekApiKey] = useState('')
   const [openrouterApiKey, setOpenrouterApiKey] = useState('')
+  const [ninerouterApiKey, setNinerouterApiKey] = useState('')
   const [aiProvider, setAiProvider] = useState<AIProvider>('deepseek')
   const [aiModel, setAiModel] = useState('deepseek-v4-pro')
   const [customModel, setCustomModel] = useState('')
@@ -86,7 +87,13 @@ export default function SettingsPage() {
         youtubeApiKey: youtubeApiKey || undefined,
         deepseekApiKey: deepseekApiKey || undefined,
         openrouterApiKey: openrouterApiKey || undefined,
-        aiProvider: providerOf(model),
+        ninerouterApiKey: ninerouterApiKey || undefined,
+        // Use the provider the user actually selected in the dropdown, not
+        // a guess from the model ID's shape — a custom 9Router model ID
+        // ("cc/claude-opus-4-7") looks just like an OpenRouter one
+        // ("author/slug"), so re-deriving it here would silently save the
+        // wrong provider.
+        aiProvider,
         aiModel: model,
         maxVideos,
       })
@@ -94,6 +101,7 @@ export default function SettingsPage() {
       setYoutubeApiKey('')
       setDeepseekApiKey('')
       setOpenrouterApiKey('')
+      setNinerouterApiKey('')
       setSaved(true)
       if (updated.configured) {
         setTimeout(() => navigate('/'), 800)
@@ -145,6 +153,13 @@ export default function SettingsPage() {
             onChange={(e) => {
               const p = e.target.value as AIProvider
               setAiProvider(p)
+              if (p === '9router') {
+                // 9Router has no fixed preset list — models are whatever
+                // upstream providers you've connected in its own dashboard —
+                // so there's nothing to pick from but the custom ID field.
+                setAiModel('custom')
+                return
+              }
               const first = MODEL_GROUPS.find((g) => g.provider === p)?.models[0]
               if (first && providerOf(aiModel === 'custom' ? customModel : aiModel) !== p) {
                 setAiModel(first.value)
@@ -155,10 +170,11 @@ export default function SettingsPage() {
           >
             <option value="deepseek">DeepSeek (trả phí, ổn định)</option>
             <option value="openrouter">OpenRouter (có model miễn phí)</option>
+            <option value="9router">9Router (tự host local, gộp nhiều provider)</option>
           </select>
         </Field>
 
-        {aiProvider === 'deepseek' ? (
+        {aiProvider === 'deepseek' && (
           <Field
             label="DeepSeek API Key"
             hint={
@@ -175,7 +191,9 @@ export default function SettingsPage() {
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
             />
           </Field>
-        ) : (
+        )}
+
+        {aiProvider === 'openrouter' && (
           <Field
             label="OpenRouter API Key"
             hint={
@@ -194,38 +212,74 @@ export default function SettingsPage() {
           </Field>
         )}
 
-        <Field label="Model AI">
-          <select
-            value={aiModel}
-            onChange={(e) => handleModelChange(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
-          >
-            {MODEL_GROUPS.map((g) => (
-              <optgroup key={g.provider} label={g.label}>
-                {g.models.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-            <option value="custom">Custom model ID (dán từ openrouter.ai/collections/free-models)...</option>
-          </select>
-        </Field>
-
-        {aiModel === 'custom' && (
+        {aiProvider === '9router' && (
           <Field
-            label="Model ID custom"
-            hint='Dạng "author/slug" hoặc "...:free", vd: nvidia/nemotron-3-ultra-550b-a55b:free'
+            label="9Router API Key"
+            hint={
+              settings?.ninerouterApiKeySet
+                ? `Đã lưu (${settings.ninerouterApiKeyPreview}). Để trống nếu không muốn đổi.`
+                : 'Cài "npm install -g 9router", chạy "9router", mở dashboard tại localhost:20128 để lấy key và kết nối provider. YT-Agent gọi vào http://localhost:20128/v1 — cần chạy 9Router trên cùng máy với backend này.'
+            }
+          >
+            <input
+              type="password"
+              value={ninerouterApiKey}
+              onChange={(e) => setNinerouterApiKey(e.target.value)}
+              placeholder={settings?.ninerouterApiKeySet ? '••••••••' : 'dán key từ dashboard 9Router'}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+            />
+          </Field>
+        )}
+
+        {aiProvider === '9router' ? (
+          <Field
+            label="Model ID (9Router)"
+            hint='Dạng "provider/model" theo dashboard 9Router của bạn, vd: cc/claude-opus-4-7, kr/claude-sonnet-4.5, glm/glm-5.1'
           >
             <input
               type="text"
               value={customModel}
               onChange={(e) => setCustomModel(e.target.value)}
-              placeholder="author/slug[:free]"
+              placeholder="provider/model"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
             />
           </Field>
+        ) : (
+          <>
+            <Field label="Model AI">
+              <select
+                value={aiModel}
+                onChange={(e) => handleModelChange(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+              >
+                {MODEL_GROUPS.map((g) => (
+                  <optgroup key={g.provider} label={g.label}>
+                    {g.models.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                <option value="custom">Custom model ID (dán từ openrouter.ai/collections/free-models)...</option>
+              </select>
+            </Field>
+
+            {aiModel === 'custom' && (
+              <Field
+                label="Model ID custom"
+                hint='Dạng "author/slug" hoặc "...:free", vd: nvidia/nemotron-3-ultra-550b-a55b:free'
+              >
+                <input
+                  type="text"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                  placeholder="author/slug[:free]"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+                />
+              </Field>
+            )}
+          </>
         )}
 
         <Field label="Số video tối đa lấy mẫu mỗi kênh" hint="Càng nhiều càng chính xác nhưng tốn quota YouTube API hơn.">

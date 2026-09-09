@@ -6,7 +6,7 @@ Phân tích một kênh/video YouTube, sau đó dùng AI (DeepSeek) để "biế
 thành chiến lược nội dung cho một kênh mới: định vị, content pillar, ý tưởng
 video, lịch đăng, mẫu tiêu đề, từ khoá SEO, bộ hashtag.
 
-- **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API hoặc OpenRouter)
+- **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API / OpenRouter / 9Router)
 - **Frontend**: React + TypeScript + Vite + Tailwind
 - **Auth**: một mật khẩu chung (`APP_PASSWORD`) bảo vệ toàn bộ API — xem
   phần [Deploy lên Vercel](#deploy-lên-vercel)
@@ -36,7 +36,7 @@ biệt trong Postgres.
 1. **YouTube Data API key**: tạo tại [Google Cloud Console](https://console.cloud.google.com/)
    → APIs & Services → Credentials → Create API Key. Nhớ bật **YouTube Data
    API v3** cho project. Quota mặc định 10.000 unit/ngày.
-2. **AI key** — chọn 1 trong 2 trên trang **Cài đặt** (`/config`):
+2. **AI key** — chọn 1 trong 3 trên trang **Cài đặt** (`/config`):
    - **DeepSeek API key**: tạo tại [platform.deepseek.com](https://platform.deepseek.com/) (mục API Keys).
    - **OpenRouter API key** (có model miễn phí): tạo tại
      [openrouter.ai/keys](https://openrouter.ai/keys) (không cần thẻ cho model
@@ -48,6 +48,14 @@ biệt trong Postgres.
      sách free xoay vòng, xem tại
      [openrouter.ai/collections/free-models](https://openrouter.ai/collections/free-models)
      rồi dán model ID vào ô "Custom" trên `/config`.
+   - **9Router** ([github.com/decolua/9router](https://github.com/decolua/9router)):
+     router AI tự host, chạy local (`npm install -g 9router && 9router`), gộp
+     40+ provider (Claude Code, Kiro, GLM, Copilot...) sau một endpoint
+     OpenAI-compatible duy nhất. Backend YT-Agent gọi cố định vào
+     `http://localhost:20128/v1` nên **9Router phải chạy cùng máy** với
+     backend. Lấy API key và danh sách model đã kết nối (dạng
+     `provider/model`, vd `cc/claude-opus-4-7`) từ dashboard tại
+     `localhost:20128`, rồi dán vào `/config`.
    - Không dùng OpenCode Zen free qua API: Zen chặn gọi ngoài OpenCode client
      (`OpenCode's free tier can only be used in OpenCode`).
 3. Go >= 1.22, Node >= 20, Docker (chạy Postgres).

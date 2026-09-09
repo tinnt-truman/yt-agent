@@ -25,6 +25,8 @@ type settingsResponse struct {
 	DeepSeekAPIKeyPreview   string    `json:"deepseekApiKeyPreview,omitempty"`
 	OpenRouterAPIKeySet     bool      `json:"openrouterApiKeySet"`
 	OpenRouterAPIKeyPreview string    `json:"openrouterApiKeyPreview,omitempty"`
+	NineRouterAPIKeySet     bool      `json:"ninerouterApiKeySet"`
+	NineRouterAPIKeyPreview string    `json:"ninerouterApiKeyPreview,omitempty"`
 	AIProvider              string    `json:"aiProvider"`
 	AIModel                 string    `json:"aiModel"`
 	MaxVideos               int       `json:"maxVideos"`
@@ -64,6 +66,10 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.OpenRouterAPIKeySet = true
 		resp.OpenRouterAPIKeyPreview = maskKey(s.OpenRouterAPIKey)
 	}
+	if s.NineRouterAPIKey != "" {
+		resp.NineRouterAPIKeySet = true
+		resp.NineRouterAPIKeyPreview = maskKey(s.NineRouterAPIKey)
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -71,6 +77,7 @@ type updateSettingsRequest struct {
 	YouTubeAPIKey    *string `json:"youtubeApiKey"`
 	DeepSeekAPIKey   *string `json:"deepseekApiKey"`
 	OpenRouterAPIKey *string `json:"openrouterApiKey"`
+	NineRouterAPIKey *string `json:"ninerouterApiKey"`
 	AIProvider       *string `json:"aiProvider"`
 	AIModel          *string `json:"aiModel"`
 	MaxVideos        *int    `json:"maxVideos"`
@@ -95,13 +102,21 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	if req.OpenRouterAPIKey != nil && *req.OpenRouterAPIKey != "" {
 		patch.OpenRouterAPIKey = req.OpenRouterAPIKey
 	}
-	if req.AIProvider != nil && (*req.AIProvider == "deepseek" || *req.AIProvider == "openrouter") {
+	if req.NineRouterAPIKey != nil && *req.NineRouterAPIKey != "" {
+		patch.NineRouterAPIKey = req.NineRouterAPIKey
+	}
+	if req.AIProvider != nil && (*req.AIProvider == "deepseek" || *req.AIProvider == "openrouter" || *req.AIProvider == "9router") {
 		patch.AIProvider = req.AIProvider
 	}
-	// An OpenRouter model implies the OpenRouter provider even if the UI only sent aiModel.
 	if req.AIModel != nil && *req.AIModel != "" {
 		patch.AIModel = req.AIModel
-		if ai.ProviderForModel(*req.AIModel) == ai.ProviderOpenRouter {
+		// An OpenRouter-shaped custom model ("author/slug" or "...:free")
+		// implies the OpenRouter provider when the caller didn't say which
+		// provider to use — a 9Router custom model looks the same shape
+		// (e.g. "cc/claude-opus-4-7") but isn't OpenRouter, so this guess
+		// only applies when aiProvider was left unset; an explicit
+		// aiProvider (handled above) always wins.
+		if req.AIProvider == nil && ai.ProviderForModel(*req.AIModel) == ai.ProviderOpenRouter {
 			or := ai.ProviderOpenRouter
 			patch.AIProvider = &or
 		}
