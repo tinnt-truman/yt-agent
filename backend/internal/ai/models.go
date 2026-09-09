@@ -1,8 +1,8 @@
 package ai
 
 const (
-	ProviderDeepSeek = "deepseek"
-	ProviderZen      = "zen"
+	ProviderDeepSeek  = "deepseek"
+	ProviderOpenRouter = "openrouter"
 
 	EndpointChat      = "chat"
 	EndpointResponses = "responses"
@@ -14,20 +14,21 @@ type ModelInfo struct {
 	Endpoint string
 }
 
-// Catalog lists every model selectable from the config page. Endpoint follows
-// https://opencode.ai/docs/zen: most Zen models speak OpenAI-compatible
-// chat/completions, while Muse Spark Contributor Free is Responses-API only
-// (chat/completions on it returns HTTP 500).
+// Catalog lists the selectable models. OpenRouter :free variants (9/2026) are
+// callable via API — unlike OpenCode Zen's free tier, which rejects calls
+// made outside the OpenCode client. The list rotates, so the config page also
+// accepts a custom model ID; anything unknown containing "/" or ending in
+// ":free" is assumed to be OpenRouter (see ProviderForModel).
 var Catalog = []ModelInfo{
 	{ID: "deepseek-v4-pro", Provider: ProviderDeepSeek, Endpoint: EndpointChat},
 	{ID: "deepseek-v4-flash", Provider: ProviderDeepSeek, Endpoint: EndpointChat},
-	{ID: "big-pickle", Provider: ProviderZen, Endpoint: EndpointChat},
-	{ID: "mimo-v2.5-free", Provider: ProviderZen, Endpoint: EndpointChat},
-	{ID: "ling-3.0-flash-fin-free", Provider: ProviderZen, Endpoint: EndpointChat},
-	{ID: "nemotron-3-ultra-free", Provider: ProviderZen, Endpoint: EndpointChat},
-	{ID: "nemotron-3.5-lightning-free", Provider: ProviderZen, Endpoint: EndpointChat},
-	{ID: "muse-spark-1.2-contributor-free", Provider: ProviderZen, Endpoint: EndpointResponses},
-	{ID: "muse-spark-1.3-contributor-free", Provider: ProviderZen, Endpoint: EndpointResponses},
+	{ID: "openrouter/free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
+	{ID: "nvidia/nemotron-3-ultra-550b-a55b:free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
+	{ID: "nvidia/nemotron-3.5-lightning:free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
+	{ID: "inclusionai/ling-3.0-flash-fin:free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
+	{ID: "minimax/minimax-m3:free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
+	{ID: "minimax/minimax-m2.7:free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
+	{ID: "z-ai/glm-5.2:free", Provider: ProviderOpenRouter, Endpoint: EndpointChat},
 }
 
 func lookupModel(id string) ModelInfo {
@@ -36,11 +37,49 @@ func lookupModel(id string) ModelInfo {
 			return m
 		}
 	}
-	return ModelInfo{ID: id, Provider: ProviderDeepSeek, Endpoint: EndpointChat}
+	return ModelInfo{ID: id, Provider: ProviderForModel(id), Endpoint: EndpointChat}
 }
 
-func IsZenModel(id string) bool {
-	return lookupModel(id).Provider == ProviderZen
+// InCatalog reports whether id is one of the preset models.
+func InCatalog(id string) bool {
+	for _, m := range Catalog {
+		if m.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ProviderForModel infers the backend from a model ID, including custom IDs
+// the UI lets the user paste in: OpenRouter IDs look like "author/slug" and
+// its free variants end in ":free".
+func ProviderForModel(id string) string {
+	for _, m := range Catalog {
+		if m.ID == id {
+			return m.Provider
+		}
+	}
+	if len(id) > 0 && (containsSlash(id) || endsWithFree(id)) {
+		return ProviderOpenRouter
+	}
+	return ProviderDeepSeek
+}
+
+func containsSlash(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' {
+			return true
+		}
+	}
+	return false
+}
+
+func endsWithFree(s string) bool {
+	const suffix = ":free"
+	if len(s) < len(suffix) {
+		return false
+	}
+	return s[len(s)-len(suffix):] == suffix
 }
 
 func IsResponsesModel(id string) bool {

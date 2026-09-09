@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { updateSettings } from '../api/client'
 import { useSettingsContext } from '../context/SettingsContext'
 
-type AIProvider = 'deepseek' | 'zen'
+type AIProvider = 'deepseek' | 'openrouter'
 
 const MODEL_GROUPS: { provider: AIProvider; label: string; models: { value: string; label: string }[] }[] = [
   {
@@ -15,16 +15,16 @@ const MODEL_GROUPS: { provider: AIProvider; label: string; models: { value: stri
     ],
   },
   {
-    provider: 'zen',
-    label: 'OpenCode Zen — miễn phí (9/2026, có thể hết hạn)',
+    provider: 'openrouter',
+    label: 'OpenRouter — miễn phí (danh sách xoay vòng)',
     models: [
-      { value: 'big-pickle', label: 'Big Pickle (free, ctx ~200K)' },
-      { value: 'mimo-v2.5-free', label: 'MiMo-V2.5 Free (free, ctx ~200K)' },
-      { value: 'ling-3.0-flash-fin-free', label: 'Ling 3.0 Flash Fin Free (free)' },
-      { value: 'nemotron-3-ultra-free', label: 'Nemotron 3 Ultra Free (free, ctx ~1M)' },
-      { value: 'nemotron-3.5-lightning-free', label: 'Nemotron 3.5 Lightning Free (free, ctx ~262K)' },
-      { value: 'muse-spark-1.2-contributor-free', label: 'Muse Spark 1.2 Contributor Free (free, ctx ~1M)' },
-      { value: 'muse-spark-1.3-contributor-free', label: 'Muse Spark 1.3 Contributor Free (free, ctx ~1M)' },
+      { value: 'openrouter/free', label: 'Auto-router (tự chọn model free còn trống)' },
+      { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra (free, ctx ~1M)' },
+      { value: 'nvidia/nemotron-3.5-lightning:free', label: 'Nemotron 3.5 Lightning (free, ctx ~262K)' },
+      { value: 'inclusionai/ling-3.0-flash-fin:free', label: 'Ling 3.0 Flash Fin (free)' },
+      { value: 'minimax/minimax-m3:free', label: 'MiniMax M3 (free)' },
+      { value: 'minimax/minimax-m2.7:free', label: 'MiniMax M2.7 (free)' },
+      { value: 'z-ai/glm-5.2:free', label: 'GLM 5.2 (free)' },
     ],
   },
 ]
@@ -33,16 +33,20 @@ function providerOf(model: string): AIProvider {
   for (const g of MODEL_GROUPS) {
     if (g.models.some((m) => m.value === model)) return g.provider
   }
+  if (model.includes('/') || model.endsWith(':free')) return 'openrouter'
   return 'deepseek'
 }
+
+const KNOWN_MODELS = new Set(MODEL_GROUPS.flatMap((g) => g.models.map((m) => m.value)))
 
 export default function SettingsPage() {
   const { settings, loading, refresh } = useSettingsContext()
   const [youtubeApiKey, setYoutubeApiKey] = useState('')
   const [deepseekApiKey, setDeepseekApiKey] = useState('')
-  const [opencodeApiKey, setOpencodeApiKey] = useState('')
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('')
   const [aiProvider, setAiProvider] = useState<AIProvider>('deepseek')
   const [aiModel, setAiModel] = useState('deepseek-v4-pro')
+  const [customModel, setCustomModel] = useState('')
   const [maxVideos, setMaxVideos] = useState(50)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,18 +56,28 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setAiProvider(settings.aiProvider || providerOf(settings.aiModel || ''))
-      setAiModel(settings.aiModel || 'deepseek-v4-pro')
+      const m = settings.aiModel || 'deepseek-v4-pro'
+      setAiModel(KNOWN_MODELS.has(m) ? m : 'custom')
+      setCustomModel(KNOWN_MODELS.has(m) ? '' : m)
       setMaxVideos(settings.maxVideos || 50)
     }
   }, [settings])
 
   function handleModelChange(value: string) {
     setAiModel(value)
-    setAiProvider(providerOf(value))
+    if (value !== 'custom') {
+      setAiProvider(providerOf(value))
+      setCustomModel('')
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const model = aiModel === 'custom' ? customModel.trim() : aiModel
+    if (aiModel === 'custom' && !model) {
+      setError('Nhập model ID custom (vd: nvidia/nemotron-3-ultra-550b-a55b:free)')
+      return
+    }
     setSaving(true)
     setError(null)
     setSaved(false)
@@ -71,15 +85,15 @@ export default function SettingsPage() {
       const updated = await updateSettings({
         youtubeApiKey: youtubeApiKey || undefined,
         deepseekApiKey: deepseekApiKey || undefined,
-        opencodeApiKey: opencodeApiKey || undefined,
-        aiProvider,
-        aiModel,
+        openrouterApiKey: openrouterApiKey || undefined,
+        aiProvider: providerOf(model),
+        aiModel: model,
         maxVideos,
       })
       await refresh()
       setYoutubeApiKey('')
       setDeepseekApiKey('')
-      setOpencodeApiKey('')
+      setOpenrouterApiKey('')
       setSaved(true)
       if (updated.configured) {
         setTimeout(() => navigate('/'), 800)
@@ -132,12 +146,15 @@ export default function SettingsPage() {
               const p = e.target.value as AIProvider
               setAiProvider(p)
               const first = MODEL_GROUPS.find((g) => g.provider === p)?.models[0]
-              if (first && providerOf(aiModel) !== p) setAiModel(first.value)
+              if (first && providerOf(aiModel === 'custom' ? customModel : aiModel) !== p) {
+                setAiModel(first.value)
+                setCustomModel('')
+              }
             }}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
           >
             <option value="deepseek">DeepSeek (trả phí, ổn định)</option>
-            <option value="zen">OpenCode Zen (có model miễn phí)</option>
+            <option value="openrouter">OpenRouter (có model miễn phí)</option>
           </select>
         </Field>
 
@@ -160,18 +177,18 @@ export default function SettingsPage() {
           </Field>
         ) : (
           <Field
-            label="OpenCode Zen API Key"
+            label="OpenRouter API Key"
             hint={
-              settings?.opencodeApiKeySet
-                ? `Đã lưu (${settings.opencodeApiKeyPreview}). Để trống nếu không muốn đổi.`
-                : 'Đăng nhập tại opencode.ai/auth rồi copy API key. Model free dùng để feedback nên đừng gửi dữ liệu nhạy cảm.'
+              settings?.openrouterApiKeySet
+                ? `Đã lưu (${settings.openrouterApiKeyPreview}). Để trống nếu không muốn đổi.`
+                : 'Tạo tại openrouter.ai/keys (không cần thẻ cho model :free). Giới hạn free ~20 req/phút, ~200 req/ngày.'
             }
           >
             <input
               type="password"
-              value={opencodeApiKey}
-              onChange={(e) => setOpencodeApiKey(e.target.value)}
-              placeholder={settings?.opencodeApiKeySet ? '••••••••' : 'opencode-...'}
+              value={openrouterApiKey}
+              onChange={(e) => setOpenrouterApiKey(e.target.value)}
+              placeholder={settings?.openrouterApiKeySet ? '••••••••' : 'sk-or-...'}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
             />
           </Field>
@@ -192,8 +209,24 @@ export default function SettingsPage() {
                 ))}
               </optgroup>
             ))}
+            <option value="custom">Custom model ID (dán từ openrouter.ai/collections/free-models)...</option>
           </select>
         </Field>
+
+        {aiModel === 'custom' && (
+          <Field
+            label="Model ID custom"
+            hint='Dạng "author/slug" hoặc "...:free", vd: nvidia/nemotron-3-ultra-550b-a55b:free'
+          >
+            <input
+              type="text"
+              value={customModel}
+              onChange={(e) => setCustomModel(e.target.value)}
+              placeholder="author/slug[:free]"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+            />
+          </Field>
+        )}
 
         <Field label="Số video tối đa lấy mẫu mỗi kênh" hint="Càng nhiều càng chính xác nhưng tốn quota YouTube API hơn.">
           <input

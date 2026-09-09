@@ -2,11 +2,10 @@
 // content strategy for a new, "biến tấu" (variation) channel. It speaks two
 // OpenAI-compatible backends, selected per job from the settings row:
 //   - DeepSeek (https://api.deepseek.com/chat/completions) with JSON mode.
-//   - OpenCode Zen (https://opencode.ai/zen/v1, free models as of 9/2026 —
-//     big-pickle, mimo-v2.5-free, ling-3.0-flash-fin-free,
-//     nemotron-3-ultra-free, nemotron-3.5-lightning-free via chat/completions,
-//     plus muse-spark-{1.2,1.3}-contributor-free via the Responses API,
-//     which is Responses-only and rejects chat/completions with HTTP 500).
+//   - OpenRouter (https://openrouter.ai/api/v1/chat/completions), whose :free
+//     model variants cost nothing via API (no credit card required, ~20
+//     req/min and ~200 req/day limits). OpenCode Zen's free tier is NOT used:
+//     it rejects API calls made outside the OpenCode client.
 package ai
 
 import (
@@ -23,8 +22,8 @@ import (
 )
 
 const (
-	deepseekBaseURL = "https://api.deepseek.com"
-	zenBaseURL      = "https://opencode.ai/zen/v1"
+	deepseekBaseURL   = "https://api.deepseek.com"
+	openRouterBaseURL = "https://openrouter.ai/api/v1"
 )
 
 type Client struct {
@@ -39,54 +38,54 @@ type Client struct {
 // NewClient builds an AI client for one job run. apiKey and model come
 // from the current settings row, fetched fresh at the start of each job so
 // changes made on the config page take effect without a restart. The model
-// ID determines the backend (see Catalog); unknown IDs fall back to DeepSeek.
+// ID determines the backend (see Catalog and ProviderForModel); unknown IDs
+// fall back to DeepSeek.
 func NewClient(apiKey, model string) *Client {
 	if model == "" {
 		model = "deepseek-v4-pro"
 	}
-	info := lookupModel(model)
+	provider := ProviderForModel(model)
 	baseURL := deepseekBaseURL
-	provider := info.Provider
-	if provider == "" {
-		provider = ProviderDeepSeek
-	}
-	if provider == ProviderZen {
-		baseURL = zenBaseURL
+	if provider == ProviderOpenRouter {
+		baseURL = openRouterBaseURL
 	}
 	return &Client{
 		apiKey:     apiKey,
 		model:      model,
 		provider:   provider,
-		endpoint:   info.Endpoint,
+		endpoint:   lookupModel(model).Endpoint,
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 100 * time.Second},
 	}
 }
 
 // NewClientFromSettings resolves the key for the selected provider and
-// forces the model's home backend, so picking a Zen model while the provider
-// still says deepseek (or vice versa) still calls the right endpoint.
+// forces the model's home backend, so picking an OpenRouter model while the
+// provider still says deepseek (or vice versa) still calls the right
+// endpoint.
 func NewClientFromSettings(s models.Settings) *Client {
 	model := s.AIModel
 	if model == "" {
 		model = "deepseek-v4-pro"
 	}
-	info := lookupModel(model)
-	provider := info.Provider
-	if provider == "" {
+	// Preset models and OpenRouter-shaped custom IDs ("author/slug", ":free")
+	// carry their own backend signal; a plain custom ID honors the explicit
+	// provider setting instead.
+	provider := ProviderForModel(model)
+	if !InCatalog(model) && !containsSlash(model) && !endsWithFree(model) {
 		provider = s.AIProviderResolved()
 	}
 	key := s.DeepSeekAPIKey
 	baseURL := deepseekBaseURL
-	if provider == ProviderZen {
-		key = s.OpenCodeAPIKey
-		baseURL = zenBaseURL
+	if provider == ProviderOpenRouter {
+		key = s.OpenRouterAPIKey
+		baseURL = openRouterBaseURL
 	}
 	return &Client{
 		apiKey:   key,
 		model:    model,
 		provider: provider,
-		endpoint: info.Endpoint,
+		endpoint: lookupModel(model).Endpoint,
 		baseURL:  baseURL,
 		// Comfortably under Vercel's function duration (300s on Hobby with
 		// Fluid Compute, the platform default — see backend/vercel.json) so
@@ -326,7 +325,7 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
 		},
 		ResponseFormat: c.jsonMode(),
-		MaxTokens:      1800 + episodeCount*350,
+		MaxTokens:      videoPromptSeriesMaxTokens(episodeCount),
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -339,6 +338,20 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 		return nil, fmt.Errorf("parse video prompt series JSON: %w", err)
 	}
 	return &out, nil
+}
+
+// videoPromptSeriesMaxTokens sizes the output budget for a multi-episode
+// series: a 2-4 character cast (~150-250 tokens each) plus per-episode
+// title/plotSummary/prompt/negativePrompt, generously margined because
+// Vietnamese text tokenizes less efficiently than English (diacritics often
+// split into multiple subword tokens) and DeepSeek tends to run verbose.
+// Capped at 8000 to stay clear of common provider completion-token ceilings.
+func videoPromptSeriesMaxTokens(episodeCount int) int {
+	tokens := 3000 + episodeCount*600
+	if tokens > 8000 {
+		tokens = 8000
+	}
+	return tokens
 }
 
 const scriptSystemPrompt = `Bạn là biên kịch video YouTube chuyên nghiệp. Bạn sẽ nhận một ý tưởng nội dung (tiêu đề, mô tả, hook) và định dạng thời lượng mong muốn. Nhiệm vụ: viết một kịch bản chi tiết theo từng cảnh cho video đó.
@@ -391,13 +404,10 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 	return &out, nil
 }
 
-// jsonMode enables the chat API's JSON mode, but only on DeepSeek — Zen's
-// free chat models don't all honor response_format, so there we rely on the
-// JSON-only instruction in the prompt plus extractJSON below.
+// jsonMode enables the chat API's JSON mode. Both DeepSeek and OpenRouter
+// (which normalizes response_format across providers) honor it; extractJSON
+// below still guards against models that wrap the answer in fences or prose.
 func (c *Client) jsonMode() *responseFormat {
-	if c.provider == ProviderZen {
-		return nil
-	}
 	return &responseFormat{Type: "json_object"}
 }
 
@@ -420,6 +430,10 @@ func (c *Client) doPost(ctx context.Context, url string, reqBody any, out any) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.provider == ProviderOpenRouter {
+		req.Header.Set("HTTP-Referer", "https://github.com/tinnt-truman/yt-agent")
+		req.Header.Set("X-Title", "YT-Agent")
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

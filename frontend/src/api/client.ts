@@ -221,6 +221,17 @@ export async function deleteVideoPromptSeriesJob(id: string): Promise<void> {
   await handle(res)
 }
 
+// retryVideoPromptSeriesJob puts a failed job back at "pending" in place
+// (same id, error cleared) rather than creating a new one — the caller then
+// resumes the normal stepVideoPromptSeriesJob poll loop to retry generation.
+export async function retryVideoPromptSeriesJob(id: string): Promise<VideoPromptSeriesJob> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series/${id}/retry`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handle(res)
+}
+
 // createScriptJob queues a script-generation job and returns it immediately
 // at "pending" — like createAnalysis, the caller drives it forward via
 // stepScriptJob on a poll loop (no backend background worker; see

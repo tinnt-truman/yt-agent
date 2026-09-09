@@ -6,7 +6,7 @@ Phân tích một kênh/video YouTube, sau đó dùng AI (DeepSeek) để "biế
 thành chiến lược nội dung cho một kênh mới: định vị, content pillar, ý tưởng
 video, lịch đăng, mẫu tiêu đề, từ khoá SEO, bộ hashtag.
 
-- **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API hoặc OpenCode Zen)
+- **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API hoặc OpenRouter)
 - **Frontend**: React + TypeScript + Vite + Tailwind
 - **Auth**: một mật khẩu chung (`APP_PASSWORD`) bảo vệ toàn bộ API — xem
   phần [Deploy lên Vercel](#deploy-lên-vercel)
@@ -38,13 +38,18 @@ biệt trong Postgres.
    API v3** cho project. Quota mặc định 10.000 unit/ngày.
 2. **AI key** — chọn 1 trong 2 trên trang **Cài đặt** (`/config`):
    - **DeepSeek API key**: tạo tại [platform.deepseek.com](https://platform.deepseek.com/) (mục API Keys).
-   - **OpenCode Zen API key** (có model miễn phí, 9/2026): đăng nhập tại
-     [opencode.ai/auth](https://opencode.ai/auth) rồi copy key. Model free gồm
-     `big-pickle`, `mimo-v2.5-free`, `ling-3.0-flash-fin-free`,
-     `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`,
-     `muse-spark-1.2/1.3-contributor-free` (context 200K–1M token). Lưu ý:
-     model free dùng để feedback nên đừng gửi dữ liệu nhạy cảm, và có thể hết
-     hạn/thay đổi không báo trước — giữ DeepSeek làm fallback.
+   - **OpenRouter API key** (có model miễn phí): tạo tại
+     [openrouter.ai/keys](https://openrouter.ai/keys) (không cần thẻ cho model
+     `:free`). Model free gợi ý: `openrouter/free` (auto-router),
+     `nvidia/nemotron-3-ultra-550b-a55b:free` (ctx ~1M),
+     `nvidia/nemotron-3.5-lightning:free` (ctx ~262K),
+     `inclusionai/ling-3.0-flash-fin:free`, `minimax/m3|m2.7:free`,
+     `z-ai/glm-5.2:free` — giới hạn free ~20 req/phút, ~200 req/ngày. Danh
+     sách free xoay vòng, xem tại
+     [openrouter.ai/collections/free-models](https://openrouter.ai/collections/free-models)
+     rồi dán model ID vào ô "Custom" trên `/config`.
+   - Không dùng OpenCode Zen free qua API: Zen chặn gọi ngoài OpenCode client
+     (`OpenCode's free tier can only be used in OpenCode`).
 3. Go >= 1.22, Node >= 20, Docker (chạy Postgres).
 
 Hai key trên **không cần điền vào `.env`** — nhập trực tiếp trên trang **Cài

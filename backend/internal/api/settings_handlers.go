@@ -18,17 +18,17 @@ func NewSettingsHandler(settings *db.SettingsStore) *SettingsHandler {
 }
 
 type settingsResponse struct {
-	Configured            bool      `json:"configured"`
-	YouTubeAPIKeySet      bool      `json:"youtubeApiKeySet"`
-	YouTubeAPIKeyPreview  string    `json:"youtubeApiKeyPreview,omitempty"`
-	DeepSeekAPIKeySet     bool      `json:"deepseekApiKeySet"`
-	DeepSeekAPIKeyPreview string    `json:"deepseekApiKeyPreview,omitempty"`
-	OpenCodeAPIKeySet     bool      `json:"opencodeApiKeySet"`
-	OpenCodeAPIKeyPreview string    `json:"opencodeApiKeyPreview,omitempty"`
-	AIProvider            string    `json:"aiProvider"`
-	AIModel               string    `json:"aiModel"`
-	MaxVideos             int       `json:"maxVideos"`
-	UpdatedAt             time.Time `json:"updatedAt"`
+	Configured              bool      `json:"configured"`
+	YouTubeAPIKeySet        bool      `json:"youtubeApiKeySet"`
+	YouTubeAPIKeyPreview    string    `json:"youtubeApiKeyPreview,omitempty"`
+	DeepSeekAPIKeySet       bool      `json:"deepseekApiKeySet"`
+	DeepSeekAPIKeyPreview   string    `json:"deepseekApiKeyPreview,omitempty"`
+	OpenRouterAPIKeySet     bool      `json:"openrouterApiKeySet"`
+	OpenRouterAPIKeyPreview string    `json:"openrouterApiKeyPreview,omitempty"`
+	AIProvider              string    `json:"aiProvider"`
+	AIModel                 string    `json:"aiModel"`
+	MaxVideos               int       `json:"maxVideos"`
+	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
 func maskKey(key string) string {
@@ -60,20 +60,20 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.DeepSeekAPIKeySet = true
 		resp.DeepSeekAPIKeyPreview = maskKey(s.DeepSeekAPIKey)
 	}
-	if s.OpenCodeAPIKey != "" {
-		resp.OpenCodeAPIKeySet = true
-		resp.OpenCodeAPIKeyPreview = maskKey(s.OpenCodeAPIKey)
+	if s.OpenRouterAPIKey != "" {
+		resp.OpenRouterAPIKeySet = true
+		resp.OpenRouterAPIKeyPreview = maskKey(s.OpenRouterAPIKey)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 type updateSettingsRequest struct {
-	YouTubeAPIKey  *string `json:"youtubeApiKey"`
-	DeepSeekAPIKey *string `json:"deepseekApiKey"`
-	OpenCodeAPIKey *string `json:"opencodeApiKey"`
-	AIProvider     *string `json:"aiProvider"`
-	AIModel        *string `json:"aiModel"`
-	MaxVideos      *int    `json:"maxVideos"`
+	YouTubeAPIKey    *string `json:"youtubeApiKey"`
+	DeepSeekAPIKey   *string `json:"deepseekApiKey"`
+	OpenRouterAPIKey *string `json:"openrouterApiKey"`
+	AIProvider       *string `json:"aiProvider"`
+	AIModel          *string `json:"aiModel"`
+	MaxVideos        *int    `json:"maxVideos"`
 }
 
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -92,18 +92,18 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	if req.DeepSeekAPIKey != nil && *req.DeepSeekAPIKey != "" {
 		patch.DeepSeekAPIKey = req.DeepSeekAPIKey
 	}
-	if req.OpenCodeAPIKey != nil && *req.OpenCodeAPIKey != "" {
-		patch.OpenCodeAPIKey = req.OpenCodeAPIKey
+	if req.OpenRouterAPIKey != nil && *req.OpenRouterAPIKey != "" {
+		patch.OpenRouterAPIKey = req.OpenRouterAPIKey
 	}
-	if req.AIProvider != nil && (*req.AIProvider == "deepseek" || *req.AIProvider == "zen") {
+	if req.AIProvider != nil && (*req.AIProvider == "deepseek" || *req.AIProvider == "openrouter") {
 		patch.AIProvider = req.AIProvider
 	}
-	// A Zen model implies the Zen provider even if the UI only sent aiModel.
+	// An OpenRouter model implies the OpenRouter provider even if the UI only sent aiModel.
 	if req.AIModel != nil && *req.AIModel != "" {
 		patch.AIModel = req.AIModel
-		if ai.IsZenModel(*req.AIModel) {
-			zen := "zen"
-			patch.AIProvider = &zen
+		if ai.ProviderForModel(*req.AIModel) == ai.ProviderOpenRouter {
+			or := ai.ProviderOpenRouter
+			patch.AIProvider = &or
 		}
 	}
 	if req.MaxVideos != nil && *req.MaxVideos > 0 {

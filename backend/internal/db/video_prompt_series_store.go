@@ -57,6 +57,17 @@ func (s *VideoPromptSeriesStore) SetFailed(ctx context.Context, id, errMsg strin
 	return err
 }
 
+// ResetToPending clears a failed job's error and puts it back at "pending"
+// so the client's next Step call retries generation in place, instead of
+// creating a new history entry for the same request.
+func (s *VideoPromptSeriesStore) ResetToPending(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE video_prompt_series SET status = $1, error_message = NULL, updated_at = now() WHERE id = $2`,
+		models.VideoPromptSeriesStatusPending, id,
+	)
+	return err
+}
+
 func (s *VideoPromptSeriesStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM video_prompt_series WHERE id = $1`, id)
 	return err

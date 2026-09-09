@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   deleteVideoPromptSeriesJob,
   listVideoPromptSeriesJobs,
+  retryVideoPromptSeriesJob,
   stepVideoPromptSeriesJob,
 } from '../api/client'
 import { formatDate } from '../lib/format'
@@ -18,6 +19,7 @@ export default function VideoPromptSeriesPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [retryingId, setRetryingId] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -54,8 +56,23 @@ export default function VideoPromptSeriesPage() {
       cancelled = true
       if (timerRef.current) clearTimeout(timerRef.current)
     }
+    // selected.status is a dep (not just id) so retrying a failed job — which
+    // flips it back to "pending" in place, same id — restarts this poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id])
+  }, [selected?.id, selected?.status])
+
+  async function handleRetry(item: VideoPromptSeriesJob) {
+    setActionError(null)
+    setRetryingId(item.id)
+    try {
+      const updated = await retryVideoPromptSeriesJob(item.id)
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không thử lại được prompt')
+    } finally {
+      setRetryingId(null)
+    }
+  }
 
   async function handleDelete(item: VideoPromptSeriesJob, e: React.MouseEvent) {
     e.stopPropagation() // don't trigger the row's own select-on-click
@@ -131,9 +148,18 @@ export default function VideoPromptSeriesPage() {
             )}
 
             {selected && selected.status === 'failed' && (
-              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {selected.errorMessage || 'Đã có lỗi xảy ra khi tạo prompt.'}
-              </p>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-sm text-red-700">
+                  {selected.errorMessage || 'Đã có lỗi xảy ra khi tạo prompt.'}
+                </p>
+                <button
+                  onClick={() => handleRetry(selected)}
+                  disabled={retryingId === selected.id}
+                  className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                >
+                  {retryingId === selected.id ? 'Đang thử lại...' : 'Thử lại'}
+                </button>
+              </div>
             )}
 
             {selected && selected.series && (

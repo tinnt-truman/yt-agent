@@ -37,6 +37,7 @@ func NewRouter(
 	protected.HandleFunc("GET /api/videos/prompt-series", vph.ListVideoPromptSeries)
 	protected.HandleFunc("GET /api/videos/prompt-series/{id}", vph.GetVideoPromptSeries)
 	protected.HandleFunc("POST /api/videos/prompt-series/{id}/step", vph.AdvanceVideoPromptSeriesStep)
+	protected.HandleFunc("POST /api/videos/prompt-series/{id}/retry", vph.RetryVideoPromptSeries)
 	protected.HandleFunc("DELETE /api/videos/prompt-series/{id}", vph.DeleteVideoPromptSeries)
 	protected.HandleFunc("POST /api/scripts", sch.CreateScript)
 	protected.HandleFunc("GET /api/scripts", sch.ListScripts)

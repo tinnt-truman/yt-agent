@@ -142,6 +142,37 @@ func (h *VideoPromptHandler) AdvanceVideoPromptSeriesStep(w http.ResponseWriter,
 	writeJSON(w, http.StatusOK, job)
 }
 
+// RetryVideoPromptSeries puts a failed job back at "pending" (clearing its
+// error) so the client's next Step call retries generation in place —
+// reusing the same history entry instead of creating a duplicate one.
+func (h *VideoPromptHandler) RetryVideoPromptSeries(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	job, err := h.series.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "video prompt series job not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch video prompt series job")
+		return
+	}
+	if job.Status != models.VideoPromptSeriesStatusFailed {
+		writeError(w, http.StatusConflict, "only a failed job can be retried")
+		return
+	}
+
+	if err := h.series.ResetToPending(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not reset video prompt series job")
+		return
+	}
+	job, err = h.series.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not fetch video prompt series job")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
 func (h *VideoPromptHandler) runSeriesGeneration(ctx context.Context, job *models.VideoPromptSeriesJob) {
 	settings, err := h.settings.Get(ctx)
 	if err != nil {

@@ -34,27 +34,27 @@ type Analysis struct {
 // Settings holds the app's single row of runtime configuration: API
 // credentials and analysis/AI tunables, editable from the config page.
 type Settings struct {
-	YouTubeAPIKey  string    `json:"-"`
-	DeepSeekAPIKey string    `json:"-"`
-	OpenCodeAPIKey string    `json:"-"`
-	AIProvider     string    `json:"aiProvider"`
-	AIModel        string    `json:"aiModel"`
-	MaxVideos      int       `json:"maxVideos"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	YouTubeAPIKey    string    `json:"-"`
+	DeepSeekAPIKey   string    `json:"-"`
+	OpenRouterAPIKey string    `json:"-"`
+	AIProvider       string    `json:"aiProvider"`
+	AIModel          string    `json:"aiModel"`
+	MaxVideos        int       `json:"maxVideos"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // AIProviderResolved normalizes the provider, defaulting old rows to deepseek.
 func (s Settings) AIProviderResolved() string {
-	if s.AIProvider == "zen" {
-		return "zen"
+	if s.AIProvider == "openrouter" {
+		return "openrouter"
 	}
 	return "deepseek"
 }
 
 // ActiveAIKey returns the API key for the currently selected provider.
 func (s Settings) ActiveAIKey() string {
-	if s.AIProviderResolved() == "zen" {
-		return s.OpenCodeAPIKey
+	if s.AIProviderResolved() == "openrouter" {
+		return s.OpenRouterAPIKey
 	}
 	return s.DeepSeekAPIKey
 }

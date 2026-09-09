@@ -29,12 +29,12 @@ type Config struct {
 	// Seed* values pre-populate the settings table on first boot only, so
 	// existing setups that already export these env vars keep working
 	// without visiting the config page. They are never read again after that.
-	SeedYouTubeAPIKey  string
-	SeedDeepSeekAPIKey string
-	SeedOpenCodeAPIKey string
-	SeedAIProvider     string
-	SeedAIModel        string
-	SeedMaxVideos      int
+	SeedYouTubeAPIKey    string
+	SeedDeepSeekAPIKey   string
+	SeedOpenRouterAPIKey string
+	SeedAIProvider       string
+	SeedAIModel          string
+	SeedMaxVideos        int
 
 	// Google OAuth ("Kênh của tôi" — connect a real YouTube channel for
 	// private Analytics/revenue data). Optional at boot: the feature just
@@ -53,16 +53,16 @@ type Config struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:               getEnv("PORT", "8080"),
-		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		CORSOrigins:        parseCSV(os.Getenv("CORS_ORIGIN")),
-		AppPassword:        os.Getenv("APP_PASSWORD"),
-		SeedYouTubeAPIKey:  os.Getenv("YOUTUBE_API_KEY"),
-		SeedDeepSeekAPIKey: os.Getenv("DEEPSEEK_API_KEY"),
-		SeedOpenCodeAPIKey: os.Getenv("OPENCODE_API_KEY"),
-		SeedAIProvider:     getEnv("AI_PROVIDER", ""),
-		SeedAIModel:        getEnv("AI_MODEL", "deepseek-v4-pro"),
-		SeedMaxVideos:      50,
+		Port:                 getEnv("PORT", "8080"),
+		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		CORSOrigins:          parseCSV(os.Getenv("CORS_ORIGIN")),
+		AppPassword:          os.Getenv("APP_PASSWORD"),
+		SeedYouTubeAPIKey:    os.Getenv("YOUTUBE_API_KEY"),
+		SeedDeepSeekAPIKey:   os.Getenv("DEEPSEEK_API_KEY"),
+		SeedOpenRouterAPIKey: firstNonEmpty(os.Getenv("OPENROUTER_API_KEY"), os.Getenv("OPENCODE_API_KEY")),
+		SeedAIProvider:       getEnv("AI_PROVIDER", ""),
+		SeedAIModel:          getEnv("AI_MODEL", "deepseek-v4-pro"),
+		SeedMaxVideos:        50,
 
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -88,6 +88,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // parseCSV splits a comma-separated env var into trimmed, non-empty values.
