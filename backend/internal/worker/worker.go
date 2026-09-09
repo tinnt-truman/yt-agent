@@ -36,7 +36,7 @@ func New(store *db.Store, settings *db.SettingsStore) *Worker {
 //     deterministic analysis, and leaves the job at "generating".
 //     This step does real network I/O but no LLM call, so it
 //     normally finishes in a few seconds.
-//   - generating -> calls DeepSeek to produce the strategy and leaves the job
+//   - generating -> calls the configured AI provider to produce the strategy
 //     at "done". Isolated in its own step because it's the one
 //     stage whose duration depends on the model, not our code.
 //   - fetching / analyzing / done / failed -> no-op (already advanced, or
@@ -62,7 +62,7 @@ func (w *Worker) stepFetchAndAnalyze(ctx context.Context, id, inputURL string) {
 		return
 	}
 	if !settings.IsConfigured() {
-		w.fail(ctx, id, fmt.Errorf("thiếu YouTube API key hoặc DeepSeek API key — vào trang Cài đặt để cấu hình"))
+		w.fail(ctx, id, fmt.Errorf("thiếu YouTube API key hoặc API key cho AI provider đang chọn — vào trang Cài đặt để cấu hình"))
 		return
 	}
 	maxVideos := settings.MaxVideos
@@ -129,7 +129,7 @@ func (w *Worker) stepGenerateStrategy(ctx context.Context, id string) {
 		return
 	}
 
-	aiClient := ai.NewClient(settings.DeepSeekAPIKey, settings.AIModel)
+	aiClient := ai.NewClientFromSettings(settings)
 	strategy, err := aiClient.GenerateStrategy(ctx, result)
 	if err != nil {
 		w.fail(ctx, id, err)

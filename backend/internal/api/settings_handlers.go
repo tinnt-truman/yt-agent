@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"ytagent/backend/internal/ai"
 	"ytagent/backend/internal/db"
 )
 
@@ -22,6 +23,9 @@ type settingsResponse struct {
 	YouTubeAPIKeyPreview  string    `json:"youtubeApiKeyPreview,omitempty"`
 	DeepSeekAPIKeySet     bool      `json:"deepseekApiKeySet"`
 	DeepSeekAPIKeyPreview string    `json:"deepseekApiKeyPreview,omitempty"`
+	OpenCodeAPIKeySet     bool      `json:"opencodeApiKeySet"`
+	OpenCodeAPIKeyPreview string    `json:"opencodeApiKeyPreview,omitempty"`
+	AIProvider            string    `json:"aiProvider"`
 	AIModel               string    `json:"aiModel"`
 	MaxVideos             int       `json:"maxVideos"`
 	UpdatedAt             time.Time `json:"updatedAt"`
@@ -43,6 +47,7 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 
 	resp := settingsResponse{
 		Configured: s.IsConfigured(),
+		AIProvider: s.AIProviderResolved(),
 		AIModel:    s.AIModel,
 		MaxVideos:  s.MaxVideos,
 		UpdatedAt:  s.UpdatedAt,
@@ -55,12 +60,18 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.DeepSeekAPIKeySet = true
 		resp.DeepSeekAPIKeyPreview = maskKey(s.DeepSeekAPIKey)
 	}
+	if s.OpenCodeAPIKey != "" {
+		resp.OpenCodeAPIKeySet = true
+		resp.OpenCodeAPIKeyPreview = maskKey(s.OpenCodeAPIKey)
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 type updateSettingsRequest struct {
 	YouTubeAPIKey  *string `json:"youtubeApiKey"`
 	DeepSeekAPIKey *string `json:"deepseekApiKey"`
+	OpenCodeAPIKey *string `json:"opencodeApiKey"`
+	AIProvider     *string `json:"aiProvider"`
 	AIModel        *string `json:"aiModel"`
 	MaxVideos      *int    `json:"maxVideos"`
 }
@@ -81,8 +92,19 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	if req.DeepSeekAPIKey != nil && *req.DeepSeekAPIKey != "" {
 		patch.DeepSeekAPIKey = req.DeepSeekAPIKey
 	}
+	if req.OpenCodeAPIKey != nil && *req.OpenCodeAPIKey != "" {
+		patch.OpenCodeAPIKey = req.OpenCodeAPIKey
+	}
+	if req.AIProvider != nil && (*req.AIProvider == "deepseek" || *req.AIProvider == "zen") {
+		patch.AIProvider = req.AIProvider
+	}
+	// A Zen model implies the Zen provider even if the UI only sent aiModel.
 	if req.AIModel != nil && *req.AIModel != "" {
 		patch.AIModel = req.AIModel
+		if ai.IsZenModel(*req.AIModel) {
+			zen := "zen"
+			patch.AIProvider = &zen
+		}
 	}
 	if req.MaxVideos != nil && *req.MaxVideos > 0 {
 		patch.MaxVideos = req.MaxVideos

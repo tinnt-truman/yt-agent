@@ -28,8 +28,8 @@ func (h *VideoPromptHandler) GeneratePrompt(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "could not load settings")
 		return
 	}
-	if settings.DeepSeekAPIKey == "" {
-		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình DeepSeek API key — vào trang Cài đặt trước")
+	if settings.ActiveAIKey() == "" {
+		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình API key cho AI provider đang chọn — vào trang Cài đặt trước")
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *VideoPromptHandler) GeneratePrompt(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	aiClient := ai.NewClient(settings.DeepSeekAPIKey, settings.AIModel)
+	aiClient := ai.NewClientFromSettings(settings)
 	prompt, err := aiClient.GenerateVideoPrompt(r.Context(), req)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -64,8 +64,8 @@ func (h *VideoPromptHandler) GeneratePromptSeries(w http.ResponseWriter, r *http
 		writeError(w, http.StatusInternalServerError, "could not load settings")
 		return
 	}
-	if settings.DeepSeekAPIKey == "" {
-		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình DeepSeek API key — vào trang Cài đặt trước")
+	if settings.ActiveAIKey() == "" {
+		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình API key cho AI provider đang chọn — vào trang Cài đặt trước")
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *VideoPromptHandler) GeneratePromptSeries(w http.ResponseWriter, r *http
 		return
 	}
 
-	aiClient := ai.NewClient(settings.DeepSeekAPIKey, settings.AIModel)
+	aiClient := ai.NewClientFromSettings(settings)
 	series, err := aiClient.GenerateVideoPromptSeries(r.Context(), req)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())

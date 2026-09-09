@@ -6,7 +6,7 @@ Phân tích một kênh/video YouTube, sau đó dùng AI (DeepSeek) để "biế
 thành chiến lược nội dung cho một kênh mới: định vị, content pillar, ý tưởng
 video, lịch đăng, mẫu tiêu đề, từ khoá SEO, bộ hashtag.
 
-- **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API)
+- **Backend**: Go (net/http, PostgreSQL, YouTube Data API v3, DeepSeek API hoặc OpenCode Zen)
 - **Frontend**: React + TypeScript + Vite + Tailwind
 - **Auth**: một mật khẩu chung (`APP_PASSWORD`) bảo vệ toàn bộ API — xem
   phần [Deploy lên Vercel](#deploy-lên-vercel)
@@ -36,7 +36,15 @@ biệt trong Postgres.
 1. **YouTube Data API key**: tạo tại [Google Cloud Console](https://console.cloud.google.com/)
    → APIs & Services → Credentials → Create API Key. Nhớ bật **YouTube Data
    API v3** cho project. Quota mặc định 10.000 unit/ngày.
-2. **DeepSeek API key**: tạo tại [platform.deepseek.com](https://platform.deepseek.com/) (mục API Keys).
+2. **AI key** — chọn 1 trong 2 trên trang **Cài đặt** (`/config`):
+   - **DeepSeek API key**: tạo tại [platform.deepseek.com](https://platform.deepseek.com/) (mục API Keys).
+   - **OpenCode Zen API key** (có model miễn phí, 9/2026): đăng nhập tại
+     [opencode.ai/auth](https://opencode.ai/auth) rồi copy key. Model free gồm
+     `big-pickle`, `mimo-v2.5-free`, `ling-3.0-flash-fin-free`,
+     `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`,
+     `muse-spark-1.2/1.3-contributor-free` (context 200K–1M token). Lưu ý:
+     model free dùng để feedback nên đừng gửi dữ liệu nhạy cảm, và có thể hết
+     hạn/thay đổi không báo trước — giữ DeepSeek làm fallback.
 3. Go >= 1.22, Node >= 20, Docker (chạy Postgres).
 
 Hai key trên **không cần điền vào `.env`** — nhập trực tiếp trên trang **Cài

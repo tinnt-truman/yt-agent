@@ -36,14 +36,33 @@ type Analysis struct {
 type Settings struct {
 	YouTubeAPIKey  string    `json:"-"`
 	DeepSeekAPIKey string    `json:"-"`
+	OpenCodeAPIKey string    `json:"-"`
+	AIProvider     string    `json:"aiProvider"`
 	AIModel        string    `json:"aiModel"`
 	MaxVideos      int       `json:"maxVideos"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
-// IsConfigured reports whether both required API keys have been set.
+// AIProviderResolved normalizes the provider, defaulting old rows to deepseek.
+func (s Settings) AIProviderResolved() string {
+	if s.AIProvider == "zen" {
+		return "zen"
+	}
+	return "deepseek"
+}
+
+// ActiveAIKey returns the API key for the currently selected provider.
+func (s Settings) ActiveAIKey() string {
+	if s.AIProviderResolved() == "zen" {
+		return s.OpenCodeAPIKey
+	}
+	return s.DeepSeekAPIKey
+}
+
+// IsConfigured reports whether YouTube plus the active AI provider's key
+// have been set. A key for the inactive provider alone is not enough.
 func (s Settings) IsConfigured() bool {
-	return s.YouTubeAPIKey != "" && s.DeepSeekAPIKey != ""
+	return s.YouTubeAPIKey != "" && s.ActiveAIKey() != ""
 }
 
 // ChannelInfo is the basic metadata fetched for a channel.
@@ -374,7 +393,7 @@ const (
 
 // ScriptJob is the persisted row for one generate-a-script job. Queued and
 // advanced one step at a time — like Analysis — rather than generated
-// synchronously in the create request, so a slow DeepSeek call never ties up
+// synchronously in the create request, so a slow AI call never ties up
 // that request (and matters even more on Vercel's Go runtime, which doesn't
 // keep goroutines alive once the HTTP response is sent). Also gives the
 // frontend a persisted history of past scripts to revisit without

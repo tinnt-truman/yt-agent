@@ -157,6 +157,9 @@ export interface Settings {
   youtubeApiKeyPreview?: string
   deepseekApiKeySet: boolean
   deepseekApiKeyPreview?: string
+  opencodeApiKeySet: boolean
+  opencodeApiKeyPreview?: string
+  aiProvider: 'deepseek' | 'zen'
   aiModel: string
   maxVideos: number
   updatedAt: string
@@ -165,6 +168,8 @@ export interface Settings {
 export interface UpdateSettingsRequest {
   youtubeApiKey?: string
   deepseekApiKey?: string
+  opencodeApiKey?: string
+  aiProvider?: 'deepseek' | 'zen'
   aiModel?: string
   maxVideos?: number
 }

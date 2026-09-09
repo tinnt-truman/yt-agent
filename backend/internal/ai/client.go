@@ -1,6 +1,12 @@
 // Package ai turns a deterministic channel analysis into an AI-generated
-// content strategy for a new, "biến tấu" (variation) channel, using the
-// DeepSeek chat completions API (OpenAI-compatible) with JSON mode.
+// content strategy for a new, "biến tấu" (variation) channel. It speaks two
+// OpenAI-compatible backends, selected per job from the settings row:
+//   - DeepSeek (https://api.deepseek.com/chat/completions) with JSON mode.
+//   - OpenCode Zen (https://opencode.ai/zen/v1, free models as of 9/2026 —
+//     big-pickle, mimo-v2.5-free, ling-3.0-flash-fin-free,
+//     nemotron-3-ultra-free, nemotron-3.5-lightning-free via chat/completions,
+//     plus muse-spark-{1.2,1.3}-contributor-free via the Responses API,
+//     which is Responses-only and rejects chat/completions with HTTP 500).
 package ai
 
 import (
@@ -10,29 +16,78 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"ytagent/backend/internal/models"
 )
 
-const apiURL = "https://api.deepseek.com/chat/completions"
+const (
+	deepseekBaseURL = "https://api.deepseek.com"
+	zenBaseURL      = "https://opencode.ai/zen/v1"
+)
 
 type Client struct {
 	apiKey     string
 	model      string
+	provider   string
+	endpoint   string
+	baseURL    string
 	httpClient *http.Client
 }
 
-// NewClient builds a DeepSeek client for one job run. apiKey and model come
+// NewClient builds an AI client for one job run. apiKey and model come
 // from the current settings row, fetched fresh at the start of each job so
-// changes made on the config page take effect without a restart.
+// changes made on the config page take effect without a restart. The model
+// ID determines the backend (see Catalog); unknown IDs fall back to DeepSeek.
 func NewClient(apiKey, model string) *Client {
 	if model == "" {
 		model = "deepseek-v4-pro"
 	}
+	info := lookupModel(model)
+	baseURL := deepseekBaseURL
+	provider := info.Provider
+	if provider == "" {
+		provider = ProviderDeepSeek
+	}
+	if provider == ProviderZen {
+		baseURL = zenBaseURL
+	}
 	return &Client{
-		apiKey: apiKey,
-		model:  model,
+		apiKey:   apiKey,
+		model:    model,
+		provider: provider,
+		endpoint: info.Endpoint,
+		baseURL:  baseURL,
+		httpClient: &http.Client{Timeout: 100 * time.Second},
+	}
+}
+
+// NewClientFromSettings resolves the key for the selected provider and
+// forces the model's home backend, so picking a Zen model while the provider
+// still says deepseek (or vice versa) still calls the right endpoint.
+func NewClientFromSettings(s models.Settings) *Client {
+	model := s.AIModel
+	if model == "" {
+		model = "deepseek-v4-pro"
+	}
+	info := lookupModel(model)
+	provider := info.Provider
+	if provider == "" {
+		provider = s.AIProviderResolved()
+	}
+	key := s.DeepSeekAPIKey
+	baseURL := deepseekBaseURL
+	if provider == ProviderZen {
+		key = s.OpenCodeAPIKey
+		baseURL = zenBaseURL
+	}
+	return &Client{
+		apiKey:   key,
+		model:    model,
+		provider: provider,
+		endpoint: info.Endpoint,
+		baseURL:  baseURL,
 		// Comfortably under Vercel's function duration (300s on Hobby with
 		// Fluid Compute, the platform default — see backend/vercel.json) so
 		// a stuck request fails with a clear error instead of the platform
@@ -87,10 +142,12 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
-// GenerateStrategy calls DeepSeek with JSON mode enabled, describing the
-// required shape in the prompt (DeepSeek's JSON mode guarantees syntactically
-// valid JSON, not schema conformance — unlike Anthropic's structured
-// outputs, so we validate the shape ourselves via json.Unmarshal below).
+// GenerateStrategy calls the configured AI backend with JSON mode enabled,
+// describing the required shape in the prompt (JSON mode guarantees
+// syntactically valid JSON, not schema conformance — unlike Anthropic's
+// structured outputs, so we validate the shape ourselves via json.Unmarshal
+// below). On Zen backends without JSON mode the same prompt plus extractJSON
+// keeps the contract.
 func (c *Client) GenerateStrategy(ctx context.Context, analysis models.AnalysisResult) (*models.StrategyOutput, error) {
 	analysisJSON, err := json.Marshal(analysis)
 	if err != nil {
@@ -109,7 +166,7 @@ func (c *Client) GenerateStrategy(ctx context.Context, analysis models.AnalysisR
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userContent},
 		},
-		ResponseFormat: &responseFormat{Type: "json_object"},
+		ResponseFormat: c.jsonMode(),
 		MaxTokens:      16000,
 	}
 
@@ -149,7 +206,7 @@ func (c *Client) GenerateTrendingInsight(ctx context.Context, report models.Tren
 			{Role: "system", Content: trendingInsightSystemPrompt},
 			{Role: "user", Content: fmt.Sprintf("Danh sách kênh trending (JSON):\n%s", string(reportJSON))},
 		},
-		ResponseFormat: &responseFormat{Type: "json_object"},
+		ResponseFormat: c.jsonMode(),
 		MaxTokens:      4000,
 	}
 
@@ -197,7 +254,7 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 			{Role: "system", Content: videoPromptSystemPrompt},
 			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
 		},
-		ResponseFormat: &responseFormat{Type: "json_object"},
+		ResponseFormat: c.jsonMode(),
 		MaxTokens:      2000,
 	}
 
@@ -268,7 +325,7 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
 		},
-		ResponseFormat: &responseFormat{Type: "json_object"},
+		ResponseFormat: c.jsonMode(),
 		MaxTokens:      1800 + episodeCount*350,
 	}
 
@@ -318,7 +375,7 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 			{Role: "system", Content: scriptSystemPrompt},
 			{Role: "user", Content: fmt.Sprintf("Ý tưởng nội dung (JSON):\n%s", string(reqJSON))},
 		},
-		ResponseFormat: &responseFormat{Type: "json_object"},
+		ResponseFormat: c.jsonMode(),
 		MaxTokens:      6000,
 	}
 
@@ -334,52 +391,156 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 	return &out, nil
 }
 
+// jsonMode enables the chat API's JSON mode, but only on DeepSeek — Zen's
+// free chat models don't all honor response_format, so there we rely on the
+// JSON-only instruction in the prompt plus extractJSON below.
+func (c *Client) jsonMode() *responseFormat {
+	if c.provider == ProviderZen {
+		return nil
+	}
+	return &responseFormat{Type: "json_object"}
+}
+
 func (c *Client) chat(ctx context.Context, reqBody chatRequest) (string, error) {
+	if c.endpoint == EndpointResponses {
+		return c.responses(ctx, reqBody)
+	}
+	return c.chatCompletions(ctx, reqBody)
+}
+
+func (c *Client) doPost(ctx context.Context, url string, reqBody any, out any) (int, []byte, error) {
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return 0, nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", err
+		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("deepseek request failed: %w", err)
+		return 0, nil, fmt.Errorf("ai request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return 0, nil, err
+	}
+	if err := json.Unmarshal(respBytes, out); err != nil {
+		return resp.StatusCode, respBytes, fmt.Errorf("parse ai response (status %d): %w", resp.StatusCode, err)
+	}
+	return resp.StatusCode, respBytes, nil
+}
+
+func (c *Client) chatCompletions(ctx context.Context, reqBody chatRequest) (string, error) {
+	var parsed chatResponse
+	status, raw, err := c.doPost(ctx, c.baseURL+"/chat/completions", reqBody, &parsed)
+	if err != nil {
 		return "", err
 	}
 
-	var parsed chatResponse
-	if err := json.Unmarshal(respBytes, &parsed); err != nil {
-		return "", fmt.Errorf("parse deepseek response (status %d): %w", resp.StatusCode, err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		msg := string(respBytes)
+	if status != http.StatusOK {
+		msg := string(raw)
 		if parsed.Error != nil && parsed.Error.Message != "" {
 			msg = parsed.Error.Message
 		}
-		return "", fmt.Errorf("deepseek api error (status %d): %s", resp.StatusCode, msg)
+		return "", fmt.Errorf("ai api error (status %d): %s", status, msg)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("deepseek returned no choices")
+		return "", fmt.Errorf("ai returned no choices")
 	}
 
 	choice := parsed.Choices[0]
 	if choice.FinishReason == "length" {
-		return "", fmt.Errorf("deepseek output was truncated (hit max_tokens); increase MaxTokens and retry")
+		return "", fmt.Errorf("ai output was truncated (hit max_tokens); increase MaxTokens and retry")
 	}
-	if choice.Message.Content == "" {
-		return "", fmt.Errorf("deepseek returned empty content")
+	return extractJSON(choice.Message.Content)
+}
+
+type responsesRequest struct {
+	Model           string `json:"model"`
+	Input           string `json:"input"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+}
+
+type responsesResponse struct {
+	OutputText string `json:"output_text"`
+	Output     []struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	} `json:"output"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// responses calls Zen's Responses API (Muse Spark Contributor Free models).
+// The prompt already demands a single JSON object, so system+user text are
+// concatenated into one input string.
+func (c *Client) responses(ctx context.Context, reqBody chatRequest) (string, error) {
+	var sb strings.Builder
+	for i, m := range reqBody.Messages {
+		if i > 0 {
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString(m.Content)
 	}
-	return choice.Message.Content, nil
+	in := responsesRequest{
+		Model:           c.model,
+		Input:           sb.String(),
+		MaxOutputTokens: reqBody.MaxTokens,
+	}
+
+	var parsed responsesResponse
+	status, raw, err := c.doPost(ctx, c.baseURL+"/responses", in, &parsed)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		msg := string(raw)
+		if parsed.Error != nil && parsed.Error.Message != "" {
+			msg = parsed.Error.Message
+		}
+		return "", fmt.Errorf("ai api error (status %d): %s", status, msg)
+	}
+	text := parsed.OutputText
+	if text == "" {
+		for _, item := range parsed.Output {
+			for _, part := range item.Content {
+				text += part.Text
+			}
+		}
+	}
+	return extractJSON(text)
+}
+
+// extractJSON tolerates models that wrap the answer in markdown fences or add
+// stray prose around it: strip ```json fences, then cut to the outermost
+// {...} when present. Returns an error on empty output so callers fail
+// loudly instead of storing garbage.
+func extractJSON(text string) (string, error) {
+	t := strings.TrimSpace(text)
+	if t == "" {
+		return "", fmt.Errorf("ai returned empty content")
+	}
+	t = strings.TrimPrefix(t, "```json")
+	t = strings.TrimPrefix(t, "```")
+	t = strings.TrimSuffix(t, "```")
+	t = strings.TrimSpace(t)
+	if start := strings.Index(t, "{"); start > 0 {
+		t = t[start:]
+	}
+	if end := strings.LastIndex(t, "}"); end >= 0 {
+		t = strings.TrimSpace(t[:end+1])
+	}
+	if t == "" {
+		return "", fmt.Errorf("ai returned empty content")
+	}
+	return t, nil
 }

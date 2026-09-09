@@ -30,7 +30,7 @@ type createScriptRequest struct {
 }
 
 // CreateScript queues a new script-generation job and returns it immediately
-// at "pending" — the actual DeepSeek call runs on the client's next
+// at "pending" — the actual AI call runs on the client's next
 // AdvanceStep call, the same queued-step pattern the analyze pipeline uses
 // (see worker.Worker) and for the same reason: Vercel's Go runtime doesn't
 // keep goroutines alive once the HTTP response is sent, so nothing can run
@@ -56,8 +56,8 @@ func (h *ScriptHandler) CreateScript(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not load settings")
 		return
 	}
-	if settings.DeepSeekAPIKey == "" {
-		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình DeepSeek API key — vào trang Cài đặt trước")
+	if settings.ActiveAIKey() == "" {
+		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình API key cho AI provider đang chọn — vào trang Cài đặt trước")
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *ScriptHandler) runGeneration(ctx context.Context, job *models.ScriptJob
 		return
 	}
 
-	aiClient := ai.NewClient(settings.DeepSeekAPIKey, settings.AIModel)
+	aiClient := ai.NewClientFromSettings(settings)
 	script, err := aiClient.GenerateScript(ctx, models.ScriptRequest{
 		Title:          job.IdeaTitle,
 		Description:    job.IdeaDescription,

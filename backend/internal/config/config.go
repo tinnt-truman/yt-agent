@@ -31,6 +31,8 @@ type Config struct {
 	// without visiting the config page. They are never read again after that.
 	SeedYouTubeAPIKey  string
 	SeedDeepSeekAPIKey string
+	SeedOpenCodeAPIKey string
+	SeedAIProvider     string
 	SeedAIModel        string
 	SeedMaxVideos      int
 
@@ -57,6 +59,8 @@ func Load() (*Config, error) {
 		AppPassword:        os.Getenv("APP_PASSWORD"),
 		SeedYouTubeAPIKey:  os.Getenv("YOUTUBE_API_KEY"),
 		SeedDeepSeekAPIKey: os.Getenv("DEEPSEEK_API_KEY"),
+		SeedOpenCodeAPIKey: os.Getenv("OPENCODE_API_KEY"),
+		SeedAIProvider:     getEnv("AI_PROVIDER", ""),
 		SeedAIModel:        getEnv("AI_MODEL", "deepseek-v4-pro"),
 		SeedMaxVideos:      50,
 

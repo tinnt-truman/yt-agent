@@ -107,7 +107,7 @@ func (h *TrendingHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 }
 
 // GenerateTrendingInsight takes a TrendingReport the client already fetched
-// (via GetTrending) and asks DeepSeek to summarize it — kept separate from
+// (via GetTrending) and asks the configured AI provider to summarize it — kept separate from
 // GetTrending so viewing the report never spends AI budget, only clicking
 // "insight" does.
 func (h *TrendingHandler) GenerateTrendingInsight(w http.ResponseWriter, r *http.Request) {
@@ -116,8 +116,8 @@ func (h *TrendingHandler) GenerateTrendingInsight(w http.ResponseWriter, r *http
 		writeError(w, http.StatusInternalServerError, "could not load settings")
 		return
 	}
-	if settings.DeepSeekAPIKey == "" {
-		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình DeepSeek API key — vào trang Cài đặt trước")
+	if settings.ActiveAIKey() == "" {
+		writeError(w, http.StatusPreconditionFailed, "chưa cấu hình API key cho AI provider đang chọn — vào trang Cài đặt trước")
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *TrendingHandler) GenerateTrendingInsight(w http.ResponseWriter, r *http
 		return
 	}
 
-	aiClient := ai.NewClient(settings.DeepSeekAPIKey, settings.AIModel)
+	aiClient := ai.NewClientFromSettings(settings)
 	insight, err := aiClient.GenerateTrendingInsight(r.Context(), report)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
