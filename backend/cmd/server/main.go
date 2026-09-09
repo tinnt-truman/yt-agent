@@ -28,6 +28,7 @@ func main() {
 	settingsStore := db.NewSettingsStore(database)
 	connectedChannelStore := db.NewConnectedChannelStore(database)
 	scriptStore := db.NewScriptStore(database)
+	videoPromptSeriesStore := db.NewVideoPromptSeriesStore(database)
 
 	if err := settingsStore.SeedFromEnv(ctx, cfg.SeedYouTubeAPIKey, cfg.SeedDeepSeekAPIKey, cfg.SeedOpenCodeAPIKey, cfg.SeedAIProvider, cfg.SeedAIModel, cfg.SeedMaxVideos); err != nil {
 		log.Fatalf("settings seed error: %v", err)
@@ -39,7 +40,7 @@ func main() {
 	trendingHandler := api.NewTrendingHandler(settingsStore)
 	oauthHandler := api.NewOAuthHandler(cfg, connectedChannelStore)
 	channelsHandler := api.NewChannelsHandler(cfg, connectedChannelStore, settingsStore)
-	videoPromptHandler := api.NewVideoPromptHandler(settingsStore)
+	videoPromptHandler := api.NewVideoPromptHandler(settingsStore, videoPromptSeriesStore)
 	scriptHandler := api.NewScriptHandler(settingsStore, scriptStore)
 	authHandler := api.NewAuthHandler(cfg.AppPassword)
 	router := api.NewRouter(handler, settingsHandler, trendingHandler, oauthHandler, channelsHandler, videoPromptHandler, scriptHandler, authHandler, cfg.CORSOrigins, cfg.AppPassword)

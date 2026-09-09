@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { generateVideoPromptSeries } from '../api/client'
-import type { VideoPromptRequest, VideoPromptSeries } from '../types'
+import { useEffect, useRef, useState } from 'react'
+import { createVideoPromptSeriesJob, stepVideoPromptSeriesJob } from '../api/client'
+import type { VideoPromptRequest, VideoPromptSeriesJob } from '../types'
 import { CopyButton } from './CopyButton'
 
 const EPISODE_OPTIONS = [3, 5, 10]
+const POLL_INTERVAL_MS = 2000
 
 export function VideoPromptModal({
   video,
@@ -13,22 +14,53 @@ export function VideoPromptModal({
   onClose: () => void
 }) {
   const [episodeCount, setEpisodeCount] = useState(5)
-  const [series, setSeries] = useState<VideoPromptSeries | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [job, setJob] = useState<VideoPromptSeriesJob | null>(null)
+  const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Queued generation: the backend has no background worker (same reason as
+  // analyses/scripts — see stepAnalysis), so this drives the job forward by
+  // calling Step on an interval while it's still pending.
+  useEffect(() => {
+    if (!job || job.status !== 'pending') return
+    let cancelled = false
+
+    async function poll() {
+      try {
+        const updated = await stepVideoPromptSeriesJob(job!.id)
+        if (cancelled) return
+        setJob(updated)
+        if (updated.status === 'pending') {
+          timerRef.current = setTimeout(poll, POLL_INTERVAL_MS)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Không tạo được prompt')
+      }
+    }
+
+    poll()
+    return () => {
+      cancelled = true
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id])
 
   async function handleGenerate() {
-    setLoading(true)
+    setCreating(true)
     setError(null)
     try {
-      const result = await generateVideoPromptSeries({ ...video, episodeCount })
-      setSeries(result)
+      const created = await createVideoPromptSeriesJob({ ...video, episodeCount })
+      setJob(created)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không tạo được prompt')
     } finally {
-      setLoading(false)
+      setCreating(false)
     }
   }
+
+  const series = job?.series
 
   return (
     <div
@@ -62,7 +94,7 @@ export function VideoPromptModal({
               <button
                 key={n}
                 onClick={() => setEpisodeCount(n)}
-                disabled={loading}
+                disabled={creating}
                 className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${
                   episodeCount === n
                     ? 'border-violet-600 bg-violet-50 text-violet-700'
@@ -77,13 +109,26 @@ export function VideoPromptModal({
 
         <button
           onClick={handleGenerate}
-          disabled={loading}
+          disabled={creating}
           className="mt-4 w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
         >
-          {loading ? 'Đang xây dựng cốt truyện...' : series ? 'Tạo lại' : 'Tạo prompt nhiều tập'}
+          {creating ? 'Đang xếp hàng...' : job ? 'Tạo lại' : 'Tạo prompt nhiều tập'}
         </button>
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        {job && job.status === 'pending' && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
+            <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+            Đang xây dựng cốt truyện...
+          </div>
+        )}
+
+        {job && job.status === 'failed' && (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {job.errorMessage || 'Đã có lỗi xảy ra khi tạo prompt.'}
+          </p>
+        )}
 
         {series && (
           <div className="mt-4 space-y-3">
@@ -168,7 +213,8 @@ export function VideoPromptModal({
 
             <p className="text-[11px] text-slate-400">
               Tạo từng tập riêng trên công cụ AI video (Kling, Google Flow, Sora...), luôn dán kèm
-              phần "Ngoại hình" của nhân vật xuất hiện trong tập để giữ hình ảnh đồng nhất.
+              phần "Ngoại hình" của nhân vật xuất hiện trong tập để giữ hình ảnh đồng nhất. Xem lại
+              trong trang "Prompt video" ở menu.
             </p>
           </div>
         )}

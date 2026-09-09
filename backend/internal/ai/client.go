@@ -54,11 +54,11 @@ func NewClient(apiKey, model string) *Client {
 		baseURL = zenBaseURL
 	}
 	return &Client{
-		apiKey:   apiKey,
-		model:    model,
-		provider: provider,
-		endpoint: info.Endpoint,
-		baseURL:  baseURL,
+		apiKey:     apiKey,
+		model:      model,
+		provider:   provider,
+		endpoint:   info.Endpoint,
+		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 100 * time.Second},
 	}
 }

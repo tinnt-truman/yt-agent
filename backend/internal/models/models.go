@@ -358,6 +358,32 @@ type VideoPromptSeries struct {
 	Episodes     []VideoPromptEpisode `json:"episodes"`
 }
 
+type VideoPromptSeriesJobStatus string
+
+const (
+	VideoPromptSeriesStatusPending VideoPromptSeriesJobStatus = "pending"
+	VideoPromptSeriesStatusDone    VideoPromptSeriesJobStatus = "done"
+	VideoPromptSeriesStatusFailed  VideoPromptSeriesJobStatus = "failed"
+)
+
+// VideoPromptSeriesJob is the persisted row for one generate-a-video-prompt-
+// series job. Queued and advanced one step at a time — like ScriptJob —
+// rather than generated synchronously in the create request, so a slow AI
+// call never ties up that request, and so the frontend gets a persisted
+// history of past series to revisit without regenerating them.
+type VideoPromptSeriesJob struct {
+	ID               string                     `json:"id"`
+	VideoTitle       string                     `json:"videoTitle"`
+	VideoDescription string                     `json:"videoDescription,omitempty"`
+	VideoTags        []string                   `json:"videoTags,omitempty"`
+	EpisodeCount     int                        `json:"episodeCount"`
+	Status           VideoPromptSeriesJobStatus `json:"status"`
+	ErrorMessage     string                     `json:"errorMessage,omitempty"`
+	SeriesJSON       json.RawMessage            `json:"series,omitempty"`
+	CreatedAt        time.Time                  `json:"createdAt"`
+	UpdatedAt        time.Time                  `json:"updatedAt"`
+}
+
 // ScriptRequest carries one content idea (from a generated strategy) used as
 // the basis for a scene-by-scene video script.
 type ScriptRequest struct {

@@ -11,7 +11,7 @@ import type {
   VideoCategory,
   VideoPrompt,
   VideoPromptRequest,
-  VideoPromptSeries,
+  VideoPromptSeriesJob,
   VideoPromptSeriesRequest,
 } from '../types'
 import { getStoredPassword, notifyUnauthorized } from './auth-token'
@@ -182,20 +182,43 @@ export async function generateVideoPrompt(req: VideoPromptRequest): Promise<Vide
   return handle(res)
 }
 
-// generateVideoPromptSeries writes an original multi-episode story with a
-// text-to-video prompt per episode — for a longer serialized story told
-// across several separately-generated videos, unlike generateVideoPrompt's
-// single short clip (still used internally by the script modal's "open
-// Kling/Google Flow" action, which only needs one clip-length prompt).
-export async function generateVideoPromptSeries(
+// createVideoPromptSeriesJob queues a multi-episode-story job and returns it
+// immediately at "pending" — like createScriptJob, the caller drives it
+// forward via stepVideoPromptSeriesJob on a poll loop (no backend background
+// worker; see stepAnalysis for why). Unlike generateVideoPrompt's single
+// short clip prompt (still used internally by the script modal's "open
+// Kling/Google Flow" action), this is a longer serialized story told across
+// several separately-generated videos.
+export async function createVideoPromptSeriesJob(
   req: VideoPromptSeriesRequest,
-): Promise<VideoPromptSeries> {
+): Promise<VideoPromptSeriesJob> {
   const res = await fetch(`${API_BASE}/api/videos/prompt-series`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(req),
   })
   return handle(res)
+}
+
+export async function stepVideoPromptSeriesJob(id: string): Promise<VideoPromptSeriesJob> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series/${id}/step`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handle(res)
+}
+
+export async function listVideoPromptSeriesJobs(): Promise<VideoPromptSeriesJob[]> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series`, { headers: authHeaders() })
+  return handle(res)
+}
+
+export async function deleteVideoPromptSeriesJob(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  await handle(res)
 }
 
 // createScriptJob queues a script-generation job and returns it immediately

@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage'
 import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
 import ScriptsPage from './pages/ScriptsPage'
+import VideoPromptSeriesPage from './pages/VideoPromptSeriesPage'
 import SettingsPage from './pages/SettingsPage'
 import TrendingPage from './pages/TrendingPage'
 import ChannelsPage from './pages/ChannelsPage'
@@ -50,6 +51,9 @@ function AuthGate() {
               <Link to="/scripts" className="hover:text-slate-900">
                 Kịch bản
               </Link>
+              <Link to="/video-prompts" className="hover:text-slate-900">
+                Prompt video
+              </Link>
               <Link to="/config" className="hover:text-slate-900">
                 Cài đặt
               </Link>
@@ -85,6 +89,7 @@ function AppRoutes() {
       <Route path="/channels/:id" element={<ChannelDetailPage />} />
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/scripts" element={<ScriptsPage />} />
+      <Route path="/video-prompts" element={<VideoPromptSeriesPage />} />
       <Route path="/config" element={<SettingsPage />} />
     </Routes>
   )

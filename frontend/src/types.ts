@@ -311,3 +311,18 @@ export interface VideoPromptSeries {
   durationHint: string
   episodes: VideoPromptEpisode[]
 }
+
+export type VideoPromptSeriesJobStatus = 'pending' | 'done' | 'failed'
+
+export interface VideoPromptSeriesJob {
+  id: string
+  videoTitle: string
+  videoDescription?: string
+  videoTags?: string[]
+  episodeCount: number
+  status: VideoPromptSeriesJobStatus
+  errorMessage?: string
+  series?: VideoPromptSeries
+  createdAt: string
+  updatedAt: string
+}
