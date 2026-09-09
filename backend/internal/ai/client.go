@@ -488,7 +488,7 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 			{Role: "user", Content: fmt.Sprintf("Ý tưởng nội dung (JSON):\n%s", string(reqJSON))},
 		},
 		ResponseFormat: c.jsonMode(),
-		MaxTokens:      6000,
+		MaxTokens:      scriptMaxTokens(req.DurationFormat),
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -501,6 +501,21 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 		return nil, fmt.Errorf("parse script JSON: %w", err)
 	}
 	return &out, nil
+}
+
+// scriptMaxTokens sizes the output budget by duration format instead of one
+// flat number for both: "long" asks for 8-12 detailed scenes (timecode,
+// visual, voiceover each) versus "short"'s 4-6 brief ones, so it needs
+// meaningfully more headroom. A flat 6000 was observed truncating a real
+// "long" script (confirmed via the "ai output was truncated" error DeepSeek
+// returned for one) — 8000 matches the same safe ceiling already used by
+// videoPromptSeriesMaxTokens elsewhere in this file. "short" keeps the
+// original 6000, which was never reported as insufficient.
+func scriptMaxTokens(durationFormat string) int {
+	if durationFormat == "long" {
+		return 8000
+	}
+	return 6000
 }
 
 // jsonMode enables the chat API's JSON mode. Both DeepSeek and OpenRouter
@@ -594,6 +609,7 @@ type chatStreamChunk struct {
 		Delta struct {
 			Content string `json:"content"`
 		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 }
 
@@ -630,7 +646,10 @@ func (c *Client) chatCompletionsStream(ctx context.Context, reqBody chatRequest)
 		return "", fmt.Errorf("ai api error (status %d): %s", resp.StatusCode, string(raw))
 	}
 
-	if content, ok := parseSSEContent(raw); ok {
+	if content, truncated, ok := parseSSEContent(raw); ok {
+		if truncated {
+			return "", fmt.Errorf("ai output was truncated (hit max_tokens); increase MaxTokens and retry")
+		}
 		return extractJSON(content)
 	}
 
@@ -648,9 +667,12 @@ func (c *Client) chatCompletionsStream(ctx context.Context, reqBody chatRequest)
 // response ("data: {...}" lines), concatenating each chunk's delta.content
 // in order — streaming only ever splits the text into pieces, never
 // reorders it, so simple concatenation reconstructs it exactly, JSON-mode
-// output included. ok is false when raw contains no "data:" line at all,
-// telling the caller to try parsing it as a single JSON object instead.
-func parseSSEContent(raw []byte) (content string, ok bool) {
+// output included. truncated mirrors chatCompletions' FinishReason ==
+// "length" check, so a stream cut off by max_tokens surfaces the same clear
+// error instead of a confusing downstream JSON-parse failure. ok is false
+// when raw contains no "data:" line at all, telling the caller to try
+// parsing it as a single JSON object instead.
+func parseSSEContent(raw []byte) (content string, truncated bool, ok bool) {
 	var sb strings.Builder
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
@@ -671,12 +693,15 @@ func parseSSEContent(raw []byte) (content string, ok bool) {
 		}
 		for _, choice := range chunk.Choices {
 			sb.WriteString(choice.Delta.Content)
+			if choice.FinishReason == "length" {
+				truncated = true
+			}
 		}
 	}
 	if !sawData {
-		return "", false
+		return "", false, false
 	}
-	return sb.String(), true
+	return sb.String(), truncated, true
 }
 
 type responsesRequest struct {

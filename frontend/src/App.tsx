@@ -1,4 +1,4 @@
-import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
@@ -36,27 +36,15 @@ function AuthGate() {
               YT Agent
             </Link>
             <nav className="flex items-center gap-4 text-sm text-slate-600">
-              <Link to="/" className="hover:text-slate-900">
+              <NavTab to="/" end>
                 Phân tích mới
-              </Link>
-              <Link to="/trending" className="hover:text-slate-900">
-                Xu hướng
-              </Link>
-              <Link to="/channels" className="hover:text-slate-900">
-                Kênh của tôi
-              </Link>
-              <Link to="/history" className="hover:text-slate-900">
-                Lịch sử
-              </Link>
-              <Link to="/scripts" className="hover:text-slate-900">
-                Kịch bản
-              </Link>
-              <Link to="/video-prompts" className="hover:text-slate-900">
-                Prompt video
-              </Link>
-              <Link to="/config" className="hover:text-slate-900">
-                Cài đặt
-              </Link>
+              </NavTab>
+              <NavTab to="/trending">Xu hướng</NavTab>
+              <NavTab to="/channels">Kênh của tôi</NavTab>
+              <NavTab to="/history">Lịch sử</NavTab>
+              <NavTab to="/scripts">Kịch bản</NavTab>
+              <NavTab to="/video-prompts">Prompt video</NavTab>
+              <NavTab to="/config">Cài đặt</NavTab>
               <button onClick={logout} className="hover:text-slate-900">
                 Đăng xuất
               </button>
@@ -92,5 +80,21 @@ function AppRoutes() {
       <Route path="/video-prompts" element={<VideoPromptSeriesPage />} />
       <Route path="/config" element={<SettingsPage />} />
     </Routes>
+  )
+}
+
+function NavTab({ to, end, children }: { to: string; end?: boolean; children: React.ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        isActive
+          ? 'font-medium text-violet-700 underline underline-offset-4'
+          : 'hover:text-slate-900'
+      }
+    >
+      {children}
+    </NavLink>
   )
 }
