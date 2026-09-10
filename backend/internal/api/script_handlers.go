@@ -101,6 +101,38 @@ func (h *ScriptHandler) AdvanceStep(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
+// RetryScript regenerates a script in place — same history entry, fresh AI
+// call with the original idea/title/hook. Works for a "done" job (re-roll a
+// result the user doesn't like) as well as a "failed" one (retry after an
+// error); a job still "pending" is left alone since it's already generating.
+func (h *ScriptHandler) RetryScript(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	job, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "script job not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch script job")
+		return
+	}
+	if job.Status == models.ScriptStatusPending {
+		writeError(w, http.StatusConflict, "script job is already generating")
+		return
+	}
+
+	if err := h.store.ResetToPending(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not reset script job")
+		return
+	}
+	job, err = h.store.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not fetch script job")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
 func (h *ScriptHandler) runGeneration(ctx context.Context, job *models.ScriptJob) {
 	settings, err := h.settings.Get(ctx)
 	if err != nil {

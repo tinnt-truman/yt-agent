@@ -61,7 +61,8 @@ export default function VideoPromptSeriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, selected?.status])
 
-  async function handleRetry(item: VideoPromptSeriesJob) {
+  async function handleRetry(item: VideoPromptSeriesJob, e?: React.MouseEvent) {
+    e?.stopPropagation() // don't trigger the row's own select-on-click
     setActionError(null)
     setRetryingId(item.id)
     try {
@@ -123,6 +124,13 @@ export default function VideoPromptSeriesPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <StatusBadge status={item.status} />
+                  <button
+                    onClick={(e) => handleRetry(item, e)}
+                    disabled={retryingId === item.id || item.status === 'pending'}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {retryingId === item.id ? 'Đang tạo...' : 'Tạo lại'}
+                  </button>
                   <button
                     onClick={(e) => handleDelete(item, e)}
                     disabled={deletingId === item.id}

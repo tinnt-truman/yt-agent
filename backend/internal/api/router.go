@@ -43,6 +43,7 @@ func NewRouter(
 	protected.HandleFunc("GET /api/scripts", sch.ListScripts)
 	protected.HandleFunc("GET /api/scripts/{id}", sch.GetScript)
 	protected.HandleFunc("POST /api/scripts/{id}/step", sch.AdvanceStep)
+	protected.HandleFunc("POST /api/scripts/{id}/retry", sch.RetryScript)
 	protected.HandleFunc("DELETE /api/scripts/{id}", sch.DeleteScript)
 
 	mux := http.NewServeMux()

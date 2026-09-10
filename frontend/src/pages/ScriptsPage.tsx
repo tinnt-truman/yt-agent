@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { deleteScriptJob, listScriptJobs, stepScriptJob } from '../api/client'
+import { deleteScriptJob, listScriptJobs, retryScriptJob, stepScriptJob } from '../api/client'
 import { exportScriptToDocx } from '../lib/exportScriptDocx'
-import { formatDate, stripOuterParens } from '../lib/format'
+import { buildSceneAIContent, formatDate, stripOuterParens } from '../lib/format'
 import type { ScriptJob } from '../types'
+import { CopyButton } from '../components/CopyButton'
 import { StatusBadge } from '../components/StatusBadge'
 
 const POLL_INTERVAL_MS = 2000
@@ -14,6 +15,7 @@ export default function ScriptsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [retryingId, setRetryingId] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -50,8 +52,24 @@ export default function ScriptsPage() {
       cancelled = true
       if (timerRef.current) clearTimeout(timerRef.current)
     }
+    // selected.status is a dep (not just id) so retrying a done/failed job —
+    // which flips it back to "pending" in place, same id — restarts this poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id])
+  }, [selected?.id, selected?.status])
+
+  async function handleRetry(item: ScriptJob, e: React.MouseEvent) {
+    e.stopPropagation() // don't trigger the row's own select-on-click
+    setActionError(null)
+    setRetryingId(item.id)
+    try {
+      const updated = await retryScriptJob(item.id)
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không tạo lại được kịch bản')
+    } finally {
+      setRetryingId(null)
+    }
+  }
 
   async function handleDelete(item: ScriptJob, e: React.MouseEvent) {
     e.stopPropagation() // don't trigger the row's own select-on-click
@@ -102,6 +120,13 @@ export default function ScriptsPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <StatusBadge status={item.status} />
+                  <button
+                    onClick={(e) => handleRetry(item, e)}
+                    disabled={retryingId === item.id || item.status === 'pending'}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {retryingId === item.id ? 'Đang tạo...' : 'Tạo lại'}
+                  </button>
                   <button
                     onClick={(e) => handleDelete(item, e)}
                     disabled={deletingId === item.id}
@@ -190,10 +215,18 @@ export default function ScriptsPage() {
                       key={scene.sceneNumber ?? scene.timecode}
                       className="rounded-md border border-slate-100 p-3"
                     >
-                      <p className="text-xs font-semibold text-indigo-700">
-                        {scene.sceneNumber ? `Cảnh ${scene.sceneNumber} · ` : ''}
-                        {scene.timecode}
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-indigo-700">
+                          {scene.sceneNumber ? `Cảnh ${scene.sceneNumber} · ` : ''}
+                          {scene.timecode}
+                        </p>
+                        <CopyButton
+                          text={buildSceneAIContent(scene)}
+                          label="Copy cho AI"
+                          bare
+                          className="text-slate-400 hover:text-slate-700"
+                        />
+                      </div>
                       {scene.setting && <p className="mt-1 text-xs text-slate-500">{scene.setting}</p>}
                       {scene.characters && scene.characters.length > 0 && (
                         <p className="mt-1 text-xs text-slate-500">

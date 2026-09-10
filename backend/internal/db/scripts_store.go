@@ -46,6 +46,19 @@ func (s *ScriptStore) SetFailed(ctx context.Context, id, errMsg string) error {
 	return err
 }
 
+// ResetToPending clears a job's error and puts it back at "pending" so the
+// client's next Step call regenerates it in place — same history entry,
+// fresh AI call — instead of creating a new one. Works from "done" (re-roll
+// a result the user doesn't like) as well as "failed" (retry after an
+// error).
+func (s *ScriptStore) ResetToPending(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE scripts SET status = $1, error_message = NULL, updated_at = now() WHERE id = $2`,
+		models.ScriptStatusPending, id,
+	)
+	return err
+}
+
 func (s *ScriptStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM scripts WHERE id = $1`, id)
 	return err

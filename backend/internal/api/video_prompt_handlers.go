@@ -137,9 +137,12 @@ func (h *VideoPromptHandler) AdvanceVideoPromptSeriesStep(w http.ResponseWriter,
 	writeJSON(w, http.StatusOK, job)
 }
 
-// RetryVideoPromptSeries puts a failed job back at "pending" (clearing its
-// error) so the client's next Step call retries generation in place —
-// reusing the same history entry instead of creating a duplicate one.
+// RetryVideoPromptSeries puts a job back at "pending" (clearing its error)
+// so the client's next Step call regenerates it in place — same history
+// entry, fresh AI call — instead of creating a duplicate one. Works from
+// "done" (re-roll a result the user doesn't like) as well as "failed"
+// (retry after an error); a job still "pending" is left alone since it's
+// already generating.
 func (h *VideoPromptHandler) RetryVideoPromptSeries(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	job, err := h.series.GetByID(r.Context(), id)
@@ -151,8 +154,8 @@ func (h *VideoPromptHandler) RetryVideoPromptSeries(w http.ResponseWriter, r *ht
 		writeError(w, http.StatusInternalServerError, "could not fetch video prompt series job")
 		return
 	}
-	if job.Status != models.VideoPromptSeriesStatusFailed {
-		writeError(w, http.StatusConflict, "only a failed job can be retried")
+	if job.Status == models.VideoPromptSeriesStatusPending {
+		writeError(w, http.StatusConflict, "video prompt series job is already generating")
 		return
 	}
 
