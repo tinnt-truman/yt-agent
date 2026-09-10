@@ -123,14 +123,43 @@ export interface ScriptRequest {
   durationFormat: ScriptDurationFormat
 }
 
+export interface ScriptCharacter {
+  name: string
+  role: string
+  appearance: string
+  coreTags: string[]
+  personalInfo: string
+  personality: string
+}
+
+export interface ScriptShot {
+  shotType: string
+  description: string
+}
+
+export interface ScriptDialogueLine {
+  character: string
+  direction?: string
+  line: string
+}
+
 export interface ScriptScene {
+  sceneNumber: number
   timecode: string
-  visual: string
+  setting: string
+  characters?: string[]
+  shots?: ScriptShot[]
+  dialogue?: ScriptDialogueLine[]
+  cutaway?: string
+  // Kept for scripts generated before this scene shape existed — those rows
+  // only ever had a flat visual/voiceover pair per scene.
+  visual?: string
   voiceover?: string
 }
 
 export interface Script {
   hook: string
+  characters?: ScriptCharacter[]
   scenes: ScriptScene[]
   callToAction: string
   durationFormat: ScriptDurationFormat

@@ -427,20 +427,62 @@ type ScriptRequest struct {
 	DurationFormat string `json:"durationFormat"` // "long" (5-10 phút) or "short" (60 giây)
 }
 
-// ScriptScene is one scene of a generated video script.
+// ScriptCharacter is one character in a generated script, present when the
+// content idea calls for one (a narrative short, animated video, sketch...).
+// Unlike video_prompt_series' Character, "appearance" here is in Vietnamese:
+// this script is for a person to read or film with, not to paste into a
+// text-to-video AI tool.
+type ScriptCharacter struct {
+	Name         string   `json:"name"`
+	Role         string   `json:"role"` // vd: "Nhân vật chính diện", "Phản diện", "Nhân vật phụ"
+	Appearance   string   `json:"appearance"`
+	CoreTags     []string `json:"coreTags"`
+	PersonalInfo string   `json:"personalInfo"`
+	Personality  string   `json:"personality"`
+}
+
+// ScriptShot is one framing within a scene — a professional shooting script
+// breaks a scene into several of these (wide/medium/close-up/action) rather
+// than one flat visual description.
+type ScriptShot struct {
+	ShotType    string `json:"shotType"` // "Toàn cảnh", "Trung cảnh", "Cận cảnh", "Động tác"
+	Description string `json:"description"`
+}
+
+// ScriptDialogueLine is one line of dialogue or voice-over within a scene,
+// with an optional acting direction (tone, emotion, action while speaking).
+type ScriptDialogueLine struct {
+	Character string `json:"character"` // vd "Voice-over" khi không phải nhân vật cụ thể
+	Direction string `json:"direction,omitempty"`
+	Line      string `json:"line"`
+}
+
+// ScriptScene is one scene of a generated video script, modeled on a
+// professional shooting script: a time/location setting, who's present, one
+// or more shots, and any dialogue — replaces the older flat
+// timecode/visual/voiceover triple with something that reads like an actual
+// script rather than a bullet list.
 type ScriptScene struct {
-	Timecode  string `json:"timecode"`
-	Visual    string `json:"visual"`
-	Voiceover string `json:"voiceover,omitempty"`
+	SceneNumber int                  `json:"sceneNumber"`
+	Timecode    string               `json:"timecode"`
+	Setting     string               `json:"setting"` // vd: "Sáng · Ngoại cảnh · Quán cà phê"
+	Characters  []string             `json:"characters,omitempty"`
+	Shots       []ScriptShot         `json:"shots"`
+	Dialogue    []ScriptDialogueLine `json:"dialogue,omitempty"`
+	// Cutaway is an optional closing atmospheric, wordless shot for the
+	// scene — used to transition or build curiosity, not every scene needs
+	// one.
+	Cutaway string `json:"cutaway,omitempty"`
 }
 
 // Script is an AI-generated scene-by-scene script for producing one video —
 // either a long-form video (5-10 minutes) or a Short (60 seconds).
 type Script struct {
-	Hook           string        `json:"hook"`
-	Scenes         []ScriptScene `json:"scenes"`
-	CallToAction   string        `json:"callToAction"`
-	DurationFormat string        `json:"durationFormat"`
+	Hook           string            `json:"hook"`
+	Characters     []ScriptCharacter `json:"characters,omitempty"`
+	Scenes         []ScriptScene     `json:"scenes"`
+	CallToAction   string            `json:"callToAction"`
+	DurationFormat string            `json:"durationFormat"`
 }
 
 type ScriptJobStatus string

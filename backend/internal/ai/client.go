@@ -78,7 +78,7 @@ func NewClient(apiKey, model string) *Client {
 		provider:   provider,
 		endpoint:   lookupModel(model).Endpoint,
 		baseURL:    baseURL,
-		httpClient: &http.Client{Timeout: 100 * time.Second},
+		httpClient: &http.Client{Timeout: httpClientTimeout},
 	}
 }
 
@@ -130,9 +130,17 @@ func NewClientFromSettings(s models.Settings) *Client {
 		// Fluid Compute, the platform default — see backend/vercel.json) so
 		// a stuck request fails with a clear error instead of the platform
 		// silently killing the function.
-		httpClient: &http.Client{Timeout: 100 * time.Second},
+		httpClient: &http.Client{Timeout: httpClientTimeout},
 	}
 }
+
+// httpClientTimeout bounds a single AI call. Was 100s, raised to 280s after
+// a real "context deadline exceeded" on a 5-episode video prompt series
+// routed through 9Router: a slow/free upstream model plus this backend's own
+// SSE reassembly (chatCompletionsStream reads the whole stream before
+// returning) can take longer than 100s for a large request. Still 20s under
+// the 300s Vercel ceiling referenced above.
+const httpClientTimeout = 280 * time.Second
 
 var strategySchemaJSON = mustIndentJSON(strategySchema)
 
@@ -453,19 +461,48 @@ func videoPromptSeriesMaxTokens(episodeCount, scenesPerEpisode int) int {
 	return tokens
 }
 
-const scriptSystemPrompt = `Bạn là biên kịch video YouTube chuyên nghiệp. Bạn sẽ nhận một ý tưởng nội dung (tiêu đề, mô tả, hook) và định dạng thời lượng mong muốn. Nhiệm vụ: viết một kịch bản chi tiết theo từng cảnh cho video đó.
+const scriptSystemPrompt = `Bạn là biên kịch kiêm đạo diễn video YouTube chuyên nghiệp. Bạn sẽ nhận một ý tưởng nội dung (tiêu đề, mô tả, hook) và định dạng thời lượng mong muốn. Nhiệm vụ: viết kịch bản chi tiết theo từng cảnh, đúng phong cách kịch bản quay chuyên nghiệp (shooting script) — không phải một danh sách hình ảnh + lời thoại đơn giản.
 
-Nếu durationFormat là "long" (video dài 5-10 phút): viết khoảng 8-12 cảnh, mỗi cảnh có timecode dạng khoảng thời gian (vd "0:00-0:30").
-Nếu durationFormat là "short" (Short 60 giây): viết khoảng 4-6 cảnh ngắn, mỗi cảnh có timecode dạng khoảng thời gian trong 60 giây (vd "0-8s").
+Nếu ý tưởng có nhân vật cụ thể (phim ngắn, hoạt hình, tiểu phẩm, review có host xuyên suốt...), hãy liệt kê nhân vật trong mảng "characters", mỗi nhân vật gồm:
+- "name": tên nhân vật
+- "role": loại nhân vật (vd: "Nhân vật chính diện", "Phản diện", "Nhân vật phụ")
+- "appearance": mô tả ngoại hình/trang phục, đủ chi tiết để giữ hình ảnh nhất quán xuyên suốt kịch bản
+- "coreTags": 3-5 từ khoá ngắn gọn mô tả cốt lõi nhân vật (vd: "tinh quái", "tốt bụng")
+- "personalInfo": tuổi, thân phận, nghề nghiệp/vai trò
+- "personality": đặc điểm tính cách (1-2 câu)
+Nếu ý tưởng KHÔNG có nhân vật cụ thể (vd: video giải thích, liệt kê, không thoại), để mảng "characters" rỗng.
 
-Mỗi cảnh gồm: mô tả hình ảnh/hành động cụ thể (visual) và lời thoại/voice-over gợi ý (voiceover, có thể để trống nếu cảnh chỉ có hình ảnh). Viết bằng tiếng Việt, giọng văn tự nhiên, phù hợp để người dùng đọc trực tiếp hoặc lồng tiếng.
+Nếu durationFormat là "long" (video dài 5-10 phút): viết khoảng 8-12 cảnh.
+Nếu durationFormat là "short" (Short 60 giây): viết khoảng 4-6 cảnh ngắn.
+
+Mỗi cảnh gồm:
+- "sceneNumber": số thứ tự cảnh, bắt đầu từ 1
+- "timecode": khoảng thời gian trong video (vd "0:00-0:30" cho video dài, "0-8s" cho Short)
+- "setting": thời điểm + nội/ngoại cảnh + địa điểm, ngắn gọn (vd: "Sáng · Ngoại cảnh · Quán cà phê")
+- "characters": mảng tên nhân vật (khớp "name" ở trên) xuất hiện trong cảnh — rỗng nếu cảnh không có nhân vật cụ thể
+- "shots": 1-3 khung hình trong cảnh, mỗi khung gồm "shotType" (chọn: "Toàn cảnh", "Trung cảnh", "Cận cảnh", "Động tác") và "description" (mô tả cụ thể hành động/hình ảnh trong khung đó) — chia nhỏ theo khung hình thay vì viết chung một đoạn
+- "dialogue": lời thoại/voice-over trong cảnh (mảng, để rỗng nếu cảnh chỉ có hình ảnh), mỗi dòng gồm "character" (tên người nói, hoặc "Voice-over" nếu không phải nhân vật cụ thể), "direction" (chỉ dẫn diễn xuất ngắn gọn — giọng điệu, cảm xúc, hành động khi nói; KHÔNG tự thêm dấu ngoặc, chỉ viết phần chữ, vd "giọng trầm khàn, tự mãn" chứ không phải "(giọng trầm khàn, tự mãn)"; để trống nếu không cần), "line" (câu thoại)
+- "cutaway": (tuỳ chọn) một khung hình khí quyển không thoại để kết cảnh/chuyển cảnh, tạo nhịp cho video — không phải cảnh nào cũng cần, ưu tiên dùng ở cảnh gây tò mò hoặc cảnh cuối; để trống nếu không cần
+
+Viết bằng tiếng Việt, giọng văn tự nhiên, phù hợp để người dùng đọc trực tiếp hoặc lồng tiếng.
 
 Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
 
 {
   "hook": "string, câu mở đầu gây chú ý trong 3-5 giây đầu",
+  "characters": [
+    {"name": "string", "role": "string", "appearance": "string", "coreTags": ["string"], "personalInfo": "string", "personality": "string"}
+  ],
   "scenes": [
-    {"timecode": "string", "visual": "string", "voiceover": "string"}
+    {
+      "sceneNumber": 1,
+      "timecode": "string",
+      "setting": "string",
+      "characters": ["string"],
+      "shots": [{"shotType": "string", "description": "string"}],
+      "dialogue": [{"character": "string", "direction": "string", "line": "string"}],
+      "cutaway": "string"
+    }
   ],
   "callToAction": "string, lời kêu gọi hành động ở cuối video (like, subscribe, comment, ...)",
   "durationFormat": "string, giữ nguyên giá trị durationFormat đã nhận"
@@ -504,13 +541,17 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 }
 
 // scriptMaxTokens sizes the output budget by duration format instead of one
-// flat number for both: "long" asks for 8-12 detailed scenes (timecode,
-// visual, voiceover each) versus "short"'s 4-6 brief ones, so it needs
-// meaningfully more headroom. A flat 6000 was observed truncating a real
-// "long" script (confirmed via the "ai output was truncated" error DeepSeek
-// returned for one) — 8000 matches the same safe ceiling already used by
-// videoPromptSeriesMaxTokens elsewhere in this file. "short" keeps the
-// original 6000, which was never reported as insufficient.
+// flat number for both: "long" asks for 8-12 scenes, each now a richer
+// shooting-script beat (optional character cast, a setting line, 1-3 shots,
+// a dialogue array with acting directions, an optional cutaway) rather than
+// a flat timecode/visual/voiceover triple, so it needs real headroom. A flat
+// 6000 was observed truncating a real "long" script even before this richer
+// schema (confirmed via the "ai output was truncated" error DeepSeek
+// returned for one) — 8000 is deliberately just under DeepSeek's documented
+// 8192 max_tokens ceiling for deepseek-chat, and matches the same safe
+// ceiling already used by videoPromptSeriesMaxTokens elsewhere in this file.
+// "short" keeps the original 6000: 4-6 brief scenes leave comfortable
+// margin even with the richer per-scene shape.
 func scriptMaxTokens(durationFormat string) int {
 	if durationFormat == "long" {
 		return 8000

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createScriptJob, generateVideoPrompt, listScriptJobs, stepScriptJob } from '../api/client'
 import { exportScriptToDocx } from '../lib/exportScriptDocx'
-import { formatDate } from '../lib/format'
+import { formatDate, stripOuterParens } from '../lib/format'
 import type { ContentIdea, Script, ScriptDurationFormat, ScriptJob } from '../types'
 import { StatusBadge } from './StatusBadge'
 
@@ -44,11 +44,26 @@ const PLATFORMS: VideoPlatform[] = [
 ]
 
 // ElevenLabs is a voice platform: it gets the full narration (hook + each
-// scene's voiceover line + CTA) rather than a visual text-to-video prompt.
+// scene's dialogue lines + CTA) rather than a visual text-to-video prompt.
+// Falls back to the flat `voiceover` field for scripts generated before the
+// scene/dialogue shape existed.
 function buildVoiceoverScript(script: Script): string {
-  return [script.hook, ...script.scenes.map((s) => s.voiceover).filter(Boolean), script.callToAction].join(
-    '\n\n',
+  const sceneNarration = script.scenes.map((s) =>
+    s.dialogue && s.dialogue.length > 0
+      ? s.dialogue.map((d) => d.line).join('\n')
+      : (s.voiceover ?? ''),
   )
+  return [script.hook, ...sceneNarration.filter(Boolean), script.callToAction].join('\n\n')
+}
+
+// Video platforms instead get a text-to-video prompt built from the visual
+// side only — each scene's shot descriptions (or the legacy flat `visual`
+// field for older scripts).
+function buildVisualSummary(script: Script): string {
+  const sceneVisuals = script.scenes.map((s) =>
+    s.shots && s.shots.length > 0 ? s.shots.map((shot) => shot.description).join('. ') : (s.visual ?? ''),
+  )
+  return [script.hook, ...sceneVisuals.filter(Boolean)].join('. ')
 }
 
 export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () => void }) {
@@ -147,8 +162,10 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
       if (platform.mode === 'voice') {
         await navigator.clipboard.writeText(buildVoiceoverScript(script))
       } else {
-        const visualSummary = [script.hook, ...script.scenes.map((s) => s.visual)].join('. ')
-        const prompt = await generateVideoPrompt({ title: job.ideaTitle, description: visualSummary })
+        const prompt = await generateVideoPrompt({
+          title: job.ideaTitle,
+          description: buildVisualSummary(script),
+        })
         await navigator.clipboard.writeText(prompt.prompt)
       }
       window.open(platform.url, '_blank', 'noopener,noreferrer')
@@ -265,16 +282,93 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
               </p>
             </div>
 
+            {script.characters && script.characters.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-slate-500">Nhân vật</p>
+                <div className="mt-1.5 space-y-2">
+                  {script.characters.map((char) => (
+                    <div key={char.name} className="rounded-md border border-slate-100 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{char.name}</p>
+                        <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                          {char.role}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600">{char.personalInfo}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">{char.personality}</p>
+                      {char.coreTags.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {char.coreTags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-700">{char.appearance}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
-              {script.scenes.map((scene, i) => (
-                <div key={i} className="rounded-md border border-slate-100 p-3">
-                  <p className="text-xs font-semibold text-indigo-700">{scene.timecode}</p>
-                  <p className="mt-1 text-sm text-slate-800">
-                    <span className="font-medium text-slate-500">Hình ảnh:</span> {scene.visual}
-                  </p>
-                  {scene.voiceover && (
-                    <p className="mt-1 text-sm text-slate-800">
-                      <span className="font-medium text-slate-500">Lời thoại:</span> {scene.voiceover}
+              {script.scenes.map((scene) => (
+                <div key={scene.sceneNumber ?? scene.timecode} className="rounded-md border border-slate-100 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-indigo-700">
+                      {scene.sceneNumber ? `Cảnh ${scene.sceneNumber} · ` : ''}
+                      {scene.timecode}
+                    </p>
+                  </div>
+                  {scene.setting && <p className="mt-1 text-xs text-slate-500">{scene.setting}</p>}
+                  {scene.characters && scene.characters.length > 0 && (
+                    <p className="mt-1 text-xs text-slate-500">Nhân vật: {scene.characters.join(', ')}</p>
+                  )}
+
+                  {scene.shots && scene.shots.length > 0 ? (
+                    <div className="mt-1.5 space-y-1">
+                      {scene.shots.map((shot, i) => (
+                        <p key={i} className="text-sm text-slate-800">
+                          <span className="font-medium text-slate-500">{shot.shotType}:</span>{' '}
+                          {shot.description}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    scene.visual && (
+                      <p className="mt-1.5 text-sm text-slate-800">
+                        <span className="font-medium text-slate-500">Hình ảnh:</span> {scene.visual}
+                      </p>
+                    )
+                  )}
+
+                  {scene.dialogue && scene.dialogue.length > 0 ? (
+                    <div className="mt-1.5 space-y-1">
+                      {scene.dialogue.map((d, i) => (
+                        <p key={i} className="text-sm text-slate-800">
+                          <span className="font-medium text-slate-500">
+                            {d.character}
+                            {d.direction ? ` (${stripOuterParens(d.direction)})` : ''}:
+                          </span>{' '}
+                          {d.line}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    scene.voiceover && (
+                      <p className="mt-1.5 text-sm text-slate-800">
+                        <span className="font-medium text-slate-500">Lời thoại:</span> {scene.voiceover}
+                      </p>
+                    )
+                  )}
+
+                  {scene.cutaway && (
+                    <p className="mt-1.5 text-xs italic leading-relaxed text-slate-400">
+                      Không gian trống: {scene.cutaway}
                     </p>
                   )}
                 </div>
