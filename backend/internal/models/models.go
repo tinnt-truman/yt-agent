@@ -384,11 +384,14 @@ type Character struct {
 // clip stays visually and narratively consistent, plus one text-to-video
 // prompt per episode.
 type VideoPromptSeries struct {
-	Synopsis     string               `json:"synopsis"`
-	Characters   []Character          `json:"characters"`
-	Style        string               `json:"style"`
-	DurationHint string               `json:"durationHint"`
-	Episodes     []VideoPromptEpisode `json:"episodes"`
+	Genre          string               `json:"genre"`
+	TargetAudience string               `json:"targetAudience"`
+	Logline        string               `json:"logline"`
+	Synopsis       string               `json:"synopsis"`
+	Characters     []Character          `json:"characters"`
+	Style          string               `json:"style"`
+	DurationHint   string               `json:"durationHint"`
+	Episodes       []VideoPromptEpisode `json:"episodes"`
 }
 
 type VideoPromptSeriesJobStatus string

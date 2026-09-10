@@ -176,6 +176,22 @@ export function VideoPromptModal({
 
         {series && (
           <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-medium text-slate-500">Thể loại</p>
+                <p className="mt-1 text-sm text-slate-800">{series.genre}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-500">Đối tượng</p>
+                <p className="mt-1 text-sm text-slate-800">{series.targetAudience}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-slate-500">Logline</p>
+              <p className="mt-1 text-sm italic leading-relaxed text-slate-700">{series.logline}</p>
+            </div>
+
             <div>
               <p className="text-xs font-medium text-slate-500">Cốt truyện tổng thể</p>
               <p className="mt-1 rounded-md bg-violet-50 p-3 text-sm leading-relaxed text-slate-800">

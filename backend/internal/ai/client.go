@@ -221,7 +221,12 @@ func (c *Client) GenerateStrategy(ctx context.Context, analysis models.AnalysisR
 			{Role: "user", Content: userContent},
 		},
 		ResponseFormat: c.jsonMode(),
-		MaxTokens:      16000,
+		// Same rationale as scriptMaxTokens/videoPromptSeriesMaxTokens: the
+		// catalog's current models support up to a 384K-token max output, and
+		// max_tokens only sets a ceiling (billing is by tokens actually
+		// generated), so there's no cost to sizing this well above what a
+		// strategy JSON should ever need.
+		MaxTokens: 128000,
 	}
 
 	text, err := c.chat(ctx, reqBody)
@@ -324,7 +329,21 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 	return &out, nil
 }
 
+// videoPromptSeriesSystemPromptTemplate follows the same "story bible first,
+// then episodes" writing method a human screenwriter would use for a
+// vi-kịch (short serialized drama): chốt thể loại/đối tượng/logline/nhân vật
+// trước, rồi viết từng tập bám theo khuôn của Tập 1, kết mỗi tập giữa bằng
+// cliffhanger, và chốt trọn vẹn ở tập cuối — all inside this one JSON call,
+// with episodeCount always the caller's requested %d (never chosen by the
+// model), so there's no separate copy-paste-between-prompts step for a
+// human to do.
 const videoPromptSeriesSystemPromptTemplate = `Bạn là biên kịch kiêm đạo diễn cho phim ngắn nhiều tập tạo bằng AI text-to-video (Kling, Google Flow, Runway, Sora...). Bạn sẽ nhận thông tin (tiêu đề, mô tả, tag) của MỘT video YouTube tham khảo. Nhiệm vụ: sáng tác một câu chuyện MỚI, có cốt truyện rõ ràng, chia thành đúng %d tập — LẤY CẢM HỨNG từ chủ đề/không khí của video tham khảo nhưng KHÔNG sao chép cốt truyện, nhân vật hay chi tiết cụ thể của video/bộ phim gốc.
+
+Trước khi viết tập nào, hãy chốt "story bible":
+- "genre": 2-3 thể loại ghép lại, mỗi thể loại một cụm ngắn (vd: "giả tưởng cổ đại + phản thần thoại + thế giới phản địa ngục")
+- "targetAudience": đối tượng khán giả hướng đến (vd: "Hướng nam giới, dòng chính thống")
+- "logline": một câu duy nhất — nêu bối cảnh, nhân vật chính, xung đột/lời nguyền hoặc tiên tri cốt lõi, hành trình phải đi, và ngụ ý về cái kết
+- "synopsis": một đoạn 150-250 từ, kể liền mạch toàn bộ câu chuyện xuyên suốt %d tập: bối cảnh mở đầu → nhân vật chính và sứ mệnh/lời nguyền của họ → các mốc gặp gỡ đồng minh chính (gọi đúng tên nhân vật đã liệt kê ở dưới) → xung đột/âm mưu lớn được hé lộ → cách giải quyết và ý nghĩa của cái kết
 
 Các công cụ AI tạo video hiện tại chỉ tạo được clip ngắn mỗi lần (vài giây đến khoảng một phút), nên câu chuyện dài được kể bằng cách tạo NHIỀU video riêng biệt (Tập 1, Tập 2, ...). Bên trong mỗi tập, hãy viết theo phong cách kịch bản quay chuyên nghiệp (shooting script): chia tập đó thành đúng %d CẢNH nối tiếp nhau — mỗi cảnh là một đơn vị bối cảnh/thời gian riêng và sẽ được tạo thành một clip video riêng.
 
@@ -336,21 +355,29 @@ Hãy xây dựng 2-4 NHÂN VẬT xuyên suốt câu chuyện (nhân vật chính
 - "personalInfo": thông tin cá nhân ngắn gọn (tiếng Việt): tuổi, thân phận, nghề nghiệp/vai trò trong câu chuyện
 - "personality": đặc điểm tính cách (tiếng Việt, 1-2 câu)
 
-Mỗi tập cần: tiêu đề ngắn, tóm tắt cốt truyện của tập đó (tiếng Việt, 1-2 câu, nối tiếp mạch truyện xuyên suốt), một "negativePrompt" dùng chung cho cả tập (tiếng Anh, những gì cần tránh — vd: text, watermark, blurry, distorted faces), và đúng %d cảnh.
+Mỗi tập cần: tiêu đề ngắn, tóm tắt cốt truyện của tập đó (tiếng Việt, 1-2 câu, nối tiếp mạch truyện xuyên suốt, KHÔNG lặp lại tình tiết đã xảy ra ở tập trước), một "negativePrompt" dùng chung cho cả tập (tiếng Anh, những gì cần tránh — vd: text, watermark, blurry, distorted faces), và đúng %d cảnh.
+
+Quy tắc bắt buộc theo vị trí từng tập trong mạch truyện:
+- Tập 1: thiết lập "khuôn mẫu" — cách chia cảnh, đặt tên, độ dài mô tả của tập này là chuẩn mọi tập sau phải bám theo. Phải giới thiệu bối cảnh, nhân vật chính, và kết ở một biến cố/nút thắt bất ngờ (cliffhanger) dẫn vào tập kế tiếp.
+- Các tập giữa: bám sát văn phong/cấu trúc của Tập 1, nối tiếp logic mạch truyện đã xảy ra ở các tập trước, và kết ở một nút thắt/cliffhanger MỚI dẫn sang tập sau.
+- Tập cuối (tập số %d): giải quyết trọn vẹn xung đột chính, có cảnh cao trào (hi sinh/lật kèo/đối đầu cuối) rồi hạ nhiệt bằng 1-2 cảnh kết thúc yên bình, khép vòng lặp cảm xúc bằng cách nhắc lại một motif/đồ vật/câu thoại đã gài từ Tập 1. KHÔNG kết bằng cliffhanger ở tập này.
 
 Mỗi cảnh gồm:
 - "sceneNumber": số thứ tự cảnh trong tập, bắt đầu từ 1
 - "setting": tiếng Việt, thời điểm + nội/ngoại cảnh + địa điểm, ngắn gọn (vd: "Sáng · Ngoại cảnh · Cổng làng biên giới")
 - "characters": mảng tên nhân vật (khớp với "name" trong danh sách nhân vật) xuất hiện trong cảnh
-- "shotType": chọn MỘT trong: "Toàn cảnh", "Trung cảnh", "Cận cảnh", "Hành động", "Không gian trống" — loại khung hình chủ đạo của cảnh (cảnh cuối mỗi tập nên ưu tiên "Không gian trống": một khung hình khí quyển không thoại, dùng để chuyển cảnh/kết tập gây tò mò)
+- "shotType": chọn MỘT trong: "Toàn cảnh", "Trung cảnh", "Cận cảnh", "Hành động", "Không gian trống" — loại khung hình chủ đạo của cảnh (cảnh cuối một tập giữa mạch nên ưu tiên "Không gian trống": một khung hình khí quyển không thoại, dùng để chuyển cảnh/kết tập gây tò mò)
 - "action": tiếng Việt, mô tả ngắn gọn hành động chính và/hoặc câu thoại quan trọng nhất diễn ra trong cảnh (1 câu)
 - "prompt": tiếng Anh, mô tả cụ thể chủ thể/hành động/bối cảnh/ánh sáng/chuyển động máy quay cho khung hình quan trọng nhất của cảnh, không quá 45 từ — nhắc tên/ngoại hình nhân vật xuất hiện trong cảnh để khớp với "appearance" đã mô tả
 
-Các cảnh trong một tập phải nối tiếp nhau mạch lạc và dựng lên cao trào của tập đó; tập sau phải nối tiếp logic từ tập trước, không lặp lại tình tiết.
+Các cảnh trong một tập phải nối tiếp nhau mạch lạc và dựng lên cao trào của tập đó; ưu tiên đặt các cỡ cảnh tương phản liên tiếp nhau (đặc tả/cận cảnh sau toàn cảnh, hoặc ngược lại) để tạo nhịp điện ảnh. Giữ ngoại hình/trang phục/khí chất nhân vật nhất quán xuyên suốt mọi tập — không tự đổi màu tóc, trang phục, vũ khí... trừ khi cốt truyện có lý do rõ ràng.
 
 Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
 
 {
+  "genre": "string",
+  "targetAudience": "string",
+  "logline": "string",
   "synopsis": "string, tiếng Việt, tóm tắt cốt truyện tổng thể xuyên suốt các tập",
   "characters": [
     {"name": "string", "role": "string", "appearance": "string (tiếng Anh)", "coreTags": ["string", "..."], "personalInfo": "string", "personality": "string"}
@@ -417,7 +444,8 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 		return nil, fmt.Errorf("marshal video series request: %w", err)
 	}
 
-	systemPrompt := fmt.Sprintf(videoPromptSeriesSystemPromptTemplate, episodeCount, scenesPerEpisode, scenesPerEpisode)
+	systemPrompt := fmt.Sprintf(videoPromptSeriesSystemPromptTemplate,
+		episodeCount, episodeCount, scenesPerEpisode, scenesPerEpisode, episodeCount)
 	reqBody := chatRequest{
 		Model: c.model,
 		Messages: []chatMessage{
@@ -448,15 +476,29 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 // 45 words, ~60 tokens, specifically so more scenes fit this budget — see
 // the system prompt template). Margined generously because Vietnamese text
 // tokenizes less efficiently than English (diacritics often split into
-// multiple subword tokens) and DeepSeek tends to run verbose. The 30-scene
-// cap keeps this comfortably under 8000 even in the worst case, so this
-// isn't expected to saturate the ceiling the way a naive per-episode formula
-// would for a large episodeCount x scenesPerEpisode request.
+// multiple subword tokens) and DeepSeek tends to run verbose.
+//
+// The cap used to be pinned at 8000, then 32000 — both guesses anchored to
+// deepseek-chat's old 8192-token max_tokens ceiling, which no longer applies:
+// the catalog now defaults to deepseek-v4-pro/deepseek-v4-flash, whose real
+// limits (per DeepSeek's docs) are a 1M-token context window and a 384K-token
+// max output. Both prior caps still truncated real generations (confirmed via
+// repeated "ai output was truncated" errors even at 32000), which means the
+// per-scene formula is underestimating actual usage — Vietnamese output,
+// verbose models, and JSON structure overhead all add up faster than a tight
+// per-field token estimate accounts for. Since max_tokens is only a ceiling
+// (billing is by tokens actually generated, not by this cap) there's no cost
+// to sizing it far above what any single job should need: 128000 leaves
+// enormous headroom under the real 384K ceiling for even the largest allowed
+// request (10 episodes x 3 scenes, the max under the 30-scene total cap).
 func videoPromptSeriesMaxTokens(episodeCount, scenesPerEpisode int) int {
 	totalScenes := episodeCount * scenesPerEpisode
-	tokens := 1200 + episodeCount*100 + totalScenes*170
-	if tokens > 8000 {
-		tokens = 8000
+	tokens := 2000 + episodeCount*150 + totalScenes*300
+	if tokens > 128000 {
+		tokens = 128000
+	}
+	if tokens < 32000 {
+		tokens = 32000
 	}
 	return tokens
 }
@@ -544,19 +586,22 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 // flat number for both: "long" asks for 8-12 scenes, each now a richer
 // shooting-script beat (optional character cast, a setting line, 1-3 shots,
 // a dialogue array with acting directions, an optional cutaway) rather than
-// a flat timecode/visual/voiceover triple, so it needs real headroom. A flat
-// 6000 was observed truncating a real "long" script even before this richer
-// schema (confirmed via the "ai output was truncated" error DeepSeek
-// returned for one) — 8000 is deliberately just under DeepSeek's documented
-// 8192 max_tokens ceiling for deepseek-chat, and matches the same safe
-// ceiling already used by videoPromptSeriesMaxTokens elsewhere in this file.
-// "short" keeps the original 6000: 4-6 brief scenes leave comfortable
-// margin even with the richer per-scene shape.
+// a flat timecode/visual/voiceover triple, so it needs real headroom.
+//
+// This has been raised twice already (6000 -> 8000 -> 16000), each time
+// anchored to deepseek-chat's old 8192-token ceiling, and each time still
+// truncating real "long" scripts — confirming the bottleneck isn't the
+// model's real limit but this budget itself being sized too tightly. The
+// catalog's current models (deepseek-v4-pro/deepseek-v4-flash) support up to
+// a 1M-token context and 384K-token max output per DeepSeek's docs, and
+// max_tokens is only a ceiling (billing is by tokens actually generated, not
+// by this cap), so there's no cost to sizing it generously: 128000/64000
+// leave enormous headroom under the real model ceiling.
 func scriptMaxTokens(durationFormat string) int {
 	if durationFormat == "long" {
-		return 8000
+		return 128000
 	}
-	return 6000
+	return 64000
 }
 
 // jsonMode enables the chat API's JSON mode. Both DeepSeek and OpenRouter

@@ -355,6 +355,9 @@ export interface Character {
 }
 
 export interface VideoPromptSeries {
+  genre: string
+  targetAudience: string
+  logline: string
   synopsis: string
   characters: Character[]
   style: string
