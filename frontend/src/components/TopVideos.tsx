@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import type { VideoInfo } from '../types'
 import { formatCompact, formatDate, formatDuration } from '../lib/format'
+import { MusicPromptModal } from './MusicPromptModal'
 import { ScriptModal } from './ScriptModal'
 import { VideoPromptModal } from './VideoPromptModal'
 
 export function TopVideos({ videos }: { videos: VideoInfo[] }) {
   const [promptVideo, setPromptVideo] = useState<VideoInfo | null>(null)
   const [scriptVideo, setScriptVideo] = useState<VideoInfo | null>(null)
+  const [musicVideo, setMusicVideo] = useState<VideoInfo | null>(null)
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -48,6 +50,12 @@ export function TopVideos({ videos }: { videos: VideoInfo[] }) {
             >
               Tạo kịch bản tóm tắt
             </button>
+            <button
+              onClick={() => setMusicVideo(v)}
+              className="mt-1 block text-[11px] font-medium text-emerald-700 hover:text-emerald-900"
+            >
+              Tạo prompt nhạc nền
+            </button>
           </div>
         ))}
       </div>
@@ -73,6 +81,17 @@ export function TopVideos({ videos }: { videos: VideoInfo[] }) {
             estimatedLength: formatDuration(scriptVideo.durationSeconds),
           }}
           onClose={() => setScriptVideo(null)}
+        />
+      )}
+
+      {musicVideo && (
+        <MusicPromptModal
+          video={{
+            title: musicVideo.title,
+            description: musicVideo.description,
+            tags: musicVideo.tags,
+          }}
+          onClose={() => setMusicVideo(null)}
         />
       )}
     </section>

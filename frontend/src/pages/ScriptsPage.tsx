@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { deleteScriptJob, listScriptJobs, retryScriptJob, stepScriptJob } from '../api/client'
+import {
+  deleteScriptJob,
+  listScriptJobs,
+  retryScriptJob,
+  reviseScriptJob,
+  stepScriptJob,
+  updateScriptJob,
+} from '../api/client'
 import { exportScriptToDocx } from '../lib/exportScriptDocx'
 import { buildSceneAIContent, formatDate, stripOuterParens } from '../lib/format'
-import type { ScriptJob } from '../types'
+import type { Script, ScriptJob } from '../types'
 import { CopyButton } from '../components/CopyButton'
+import { normalizeScriptForEdit, ScriptEditor } from '../components/ScriptEditor'
+import { ReviseWithFeedback } from '../components/ReviseWithFeedback'
 import { StatusBadge } from '../components/StatusBadge'
 
 const POLL_INTERVAL_MS = 2000
@@ -16,6 +25,9 @@ export default function ScriptsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
+  const [revisingId, setRevisingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Script | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -26,6 +38,13 @@ export default function ScriptsPage() {
   }, [])
 
   const selected = items.find((i) => i.id === selectedId) ?? null
+
+  // Leaving unsaved edits behind when switching to a different script (or
+  // it gets regenerated out from under the editor) would be surprising —
+  // drop the draft whenever the selection changes.
+  useEffect(() => {
+    setDraft(null)
+  }, [selectedId])
 
   // A job left "pending" (e.g. the tab was closed mid-generation) has no
   // background worker to finish it — advance it on an interval, same as
@@ -68,6 +87,39 @@ export default function ScriptsPage() {
       setActionError(err instanceof Error ? err.message : 'Không tạo lại được kịch bản')
     } finally {
       setRetryingId(null)
+    }
+  }
+
+  async function handleRevise(item: ScriptJob, feedback: string) {
+    setActionError(null)
+    setRevisingId(item.id)
+    try {
+      const updated = await reviseScriptJob(item.id, feedback)
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không gửi được góp ý cho AI')
+    } finally {
+      setRevisingId(null)
+    }
+  }
+
+  function handleStartEdit(script: Script) {
+    setActionError(null)
+    setDraft(normalizeScriptForEdit(script))
+  }
+
+  async function handleSaveEdit(item: ScriptJob) {
+    if (!draft) return
+    setActionError(null)
+    setSavingEdit(true)
+    try {
+      const updated = await updateScriptJob(item.id, draft)
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+      setDraft(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không lưu được kịch bản')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -157,16 +209,48 @@ export default function ScriptsPage() {
               </p>
             )}
 
-            {selected && selected.script && (
+            {selected && selected.script && draft && (
               <div className="space-y-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                    {selected.ideaTitle}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {selected.durationFormat === 'short' ? 'Short (60 giây)' : 'Video dài (5-10 phút)'} ·{' '}
-                    {formatDate(selected.createdAt)}
-                  </p>
+                <ScriptEditor value={draft} onChange={setDraft} />
+                <div className="flex gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    onClick={() => handleSaveEdit(selected)}
+                    disabled={savingEdit}
+                    className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {savingEdit ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
+                  </button>
+                  <button
+                    onClick={() => setDraft(null)}
+                    disabled={savingEdit}
+                    className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Huỷ
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selected && selected.script && !draft && (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                      {selected.script.title || selected.ideaTitle}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {selected.durationFormat === 'short' ? 'Short (60 giây)' : 'Video dài (5-10 phút)'} ·{' '}
+                      {formatDate(selected.createdAt)}
+                    </p>
+                  </div>
+                  {selected.status !== 'pending' && (
+                    <button
+                      onClick={() => handleStartEdit(selected.script!)}
+                      className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Chỉnh sửa
+                    </button>
+                  )}
                 </div>
 
                 <div>
@@ -289,12 +373,24 @@ export default function ScriptsPage() {
 
                 <div className="border-t border-slate-100 pt-3">
                   <button
-                    onClick={() => exportScriptToDocx(selected.ideaTitle, selected.script!)}
+                    onClick={() =>
+                      exportScriptToDocx(selected.script!.title || selected.ideaTitle, selected.script!)
+                    }
                     className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
                   >
                     Xuất file .docx
                   </button>
                 </div>
+
+                {selected.status !== 'pending' && (
+                  <div className="border-t border-slate-100 pt-3">
+                    <p className="mb-1.5 text-xs font-medium text-slate-500">Không ưng ý? Góp ý cho AI</p>
+                    <ReviseWithFeedback
+                      onSubmit={(feedback) => handleRevise(selected, feedback)}
+                      busy={revisingId === selected.id}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { createScriptJob, generateVideoPrompt, listScriptJobs, stepScriptJob } from '../api/client'
+import {
+  createScriptJob,
+  generateVideoPrompt,
+  listScriptJobs,
+  reviseScriptJob,
+  stepScriptJob,
+  updateScriptJob,
+} from '../api/client'
 import { exportScriptToDocx } from '../lib/exportScriptDocx'
 import { formatDate, stripOuterParens } from '../lib/format'
 import type { ContentIdea, Script, ScriptDurationFormat, ScriptJob } from '../types'
+import { normalizeScriptForEdit, ScriptEditor } from './ScriptEditor'
+import { ReviseWithFeedback } from './ReviseWithFeedback'
 import { StatusBadge } from './StatusBadge'
 
 const POLL_INTERVAL_MS = 2000
@@ -78,6 +87,9 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
   const [platformId, setPlatformId] = useState(PLATFORMS[0].id)
   const [platformStatus, setPlatformStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const platform = PLATFORMS.find((p) => p.id === platformId) ?? PLATFORMS[0]
+  const [draft, setDraft] = useState<Script | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [revising, setRevising] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // The generation history — every script ever generated, newest first, so
@@ -130,6 +142,49 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job?.id])
 
+  // Leaving unsaved edits behind when switching to a different history
+  // entry (or generating a new one) would be surprising — drop the draft
+  // whenever the open job changes.
+  useEffect(() => {
+    setDraft(null)
+  }, [job?.id])
+
+  async function handleRevise(feedback: string) {
+    if (!job) return
+    setError(null)
+    setRevising(true)
+    try {
+      const updated = await reviseScriptJob(job.id, feedback)
+      setJob(updated)
+      setHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không gửi được góp ý cho AI')
+    } finally {
+      setRevising(false)
+    }
+  }
+
+  function handleStartEdit(script: Script) {
+    setError(null)
+    setDraft(normalizeScriptForEdit(script))
+  }
+
+  async function handleSaveEdit() {
+    if (!job || !draft) return
+    setError(null)
+    setSavingEdit(true)
+    try {
+      const updated = await updateScriptJob(job.id, draft)
+      setJob(updated)
+      setHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
+      setDraft(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không lưu được kịch bản')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   async function handleGenerate() {
     setCreating(true)
     setError(null)
@@ -163,7 +218,7 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
         await navigator.clipboard.writeText(buildVoiceoverScript(script))
       } else {
         const prompt = await generateVideoPrompt({
-          title: job.ideaTitle,
+          title: script.title || job.ideaTitle,
           description: buildVisualSummary(script),
         })
         await navigator.clipboard.writeText(prompt.prompt)
@@ -273,8 +328,42 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
           </p>
         )}
 
-        {job && script && (
+        {job && script && draft && (
           <div className="mt-4 space-y-3">
+            <ScriptEditor value={draft} onChange={setDraft} />
+            <div className="flex gap-2 border-t border-slate-100 pt-3">
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+                className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {savingEdit ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
+              </button>
+              <button
+                onClick={() => setDraft(null)}
+                disabled={savingEdit}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Huỷ
+              </button>
+            </div>
+          </div>
+        )}
+
+        {job && script && !draft && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              {script.title && <p className="text-sm font-semibold text-slate-900">{script.title}</p>}
+              {job.status !== 'pending' && (
+                <button
+                  onClick={() => handleStartEdit(script)}
+                  className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                >
+                  Chỉnh sửa
+                </button>
+              )}
+            </div>
+
             <div>
               <p className="text-xs font-medium text-slate-500">Hook mở đầu</p>
               <p className="mt-1 rounded-md bg-indigo-50 p-3 text-sm leading-relaxed text-slate-800">
@@ -384,7 +473,7 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
 
             <div className="border-t border-slate-100 pt-3">
               <button
-                onClick={() => exportScriptToDocx(job.ideaTitle, script)}
+                onClick={() => exportScriptToDocx(script.title || job.ideaTitle, script)}
                 className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
               >
                 Xuất file .docx
@@ -414,6 +503,13 @@ export function ScriptModal({ idea, onClose }: { idea: ContentIdea; onClose: () 
                   : 'Đã copy prompt video vào clipboard — dán vào nền tảng vừa mở.'}
               </p>
             </div>
+
+            {job.status !== 'pending' && (
+              <div className="border-t border-slate-100 pt-3">
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Không ưng ý? Góp ý cho AI</p>
+                <ReviseWithFeedback onSubmit={handleRevise} busy={revising} />
+              </div>
+            )}
           </div>
         )}
 

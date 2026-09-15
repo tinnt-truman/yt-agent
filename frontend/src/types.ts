@@ -158,6 +158,10 @@ export interface ScriptScene {
 }
 
 export interface Script {
+  // AI-invented title, distinct from the (possibly copyrighted) input idea
+  // title — absent on scripts generated before this field existed, fall
+  // back to ScriptJob.ideaTitle in that case.
+  title?: string
   hook: string
   characters?: ScriptCharacter[]
   scenes: ScriptScene[]
@@ -176,6 +180,9 @@ export interface ScriptJob {
   status: ScriptJobStatus
   errorMessage?: string
   script?: Script
+  // Set while a "revise with feedback" run is pending/failed — the note
+  // being applied to the existing script. Cleared once it succeeds.
+  revisionFeedback?: string
   createdAt: string
   updatedAt: string
 }
@@ -194,6 +201,12 @@ export interface Settings {
   ninerouterBaseUrl: string
   aiProvider: 'deepseek' | 'openrouter' | '9router'
   aiModel: string
+  googleClientIdSet: boolean
+  googleClientIdPreview?: string
+  googleClientSecretSet: boolean
+  googleClientSecretPreview?: string
+  /** Not a secret — the plain callback URL, e.g. https://.../api/oauth/google/callback. */
+  googleOauthRedirectUrl: string
   maxVideos: number
   updatedAt: string
 }
@@ -207,6 +220,10 @@ export interface UpdateSettingsRequest {
   ninerouterBaseUrl?: string
   aiProvider?: 'deepseek' | 'openrouter' | '9router'
   aiModel?: string
+  googleClientId?: string
+  googleClientSecret?: string
+  /** Not a secret. Always sent (blank is meaningful), like ninerouterBaseUrl. */
+  googleOauthRedirectUrl?: string
   maxVideos?: number
 }
 
@@ -355,6 +372,10 @@ export interface Character {
 }
 
 export interface VideoPromptSeries {
+  // AI-invented title, distinct from the (possibly copyrighted) reference
+  // video's real title — absent on series generated before this field
+  // existed, fall back to VideoPromptSeriesJob.videoTitle in that case.
+  seriesTitle?: string
   genre: string
   targetAudience: string
   logline: string
@@ -377,6 +398,38 @@ export interface VideoPromptSeriesJob {
   status: VideoPromptSeriesJobStatus
   errorMessage?: string
   series?: VideoPromptSeries
+  // Set while a "revise with feedback" run is pending/failed — the note
+  // being applied to the existing series. Cleared once it succeeds.
+  revisionFeedback?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MusicPromptRequest {
+  title: string
+  description?: string
+  tags?: string[]
+}
+
+export interface MusicPrompt {
+  prompt: string
+  genre: string
+  moodTags: string[]
+  durationHint: string
+  /** Short suggested lyric snippet; absent when the track is instrumental. */
+  lyricsHint?: string
+}
+
+export type MusicPromptJobStatus = 'pending' | 'done' | 'failed'
+
+export interface MusicPromptJob {
+  id: string
+  videoTitle: string
+  videoDescription?: string
+  videoTags?: string[]
+  status: MusicPromptJobStatus
+  errorMessage?: string
+  musicPrompt?: MusicPrompt
   createdAt: string
   updatedAt: string
 }

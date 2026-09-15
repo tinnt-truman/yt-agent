@@ -133,14 +133,114 @@ func (h *ScriptHandler) RetryScript(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
+// ReviseScript queues a human-written revision note against an already
+// generated script — the next Step call asks the AI to edit the existing
+// script accordingly instead of generating a fresh one (see runGeneration).
+// Unlike RetryScript (from-scratch regeneration), this requires a script to
+// already exist, since there's nothing to revise otherwise.
+func (h *ScriptHandler) ReviseScript(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req reviseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Feedback = strings.TrimSpace(req.Feedback)
+	if req.Feedback == "" {
+		writeError(w, http.StatusBadRequest, "feedback is required")
+		return
+	}
+
+	job, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "script job not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch script job")
+		return
+	}
+	if job.Status == models.ScriptStatusPending {
+		writeError(w, http.StatusConflict, "script job is already generating")
+		return
+	}
+	if len(job.ScriptJSON) == 0 {
+		writeError(w, http.StatusConflict, "script must be generated at least once before it can be revised")
+		return
+	}
+
+	if err := h.store.SetRevisionPending(r.Context(), id, req.Feedback); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not queue script revision")
+		return
+	}
+	job, err = h.store.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not fetch script job")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+// UpdateScript overwrites a script with one a human edited directly in the
+// UI — saved synchronously (no AI call, no pending step) since there's
+// nothing to generate. Works from any status: fixing up a "failed" job this
+// way is as valid as touching up a "done" one.
+func (h *ScriptHandler) UpdateScript(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var script models.Script
+	if err := json.NewDecoder(r.Body).Decode(&script); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(script.Scenes) == 0 {
+		writeError(w, http.StatusBadRequest, "script must have at least one scene")
+		return
+	}
+
+	if err := h.store.SetDone(r.Context(), id, script); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not save script")
+		return
+	}
+	job, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "script job not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch script job")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+// runGeneration either revises the existing script per a queued
+// RevisionFeedback note, or — the common case — generates a fresh one from
+// the job's idea/title/hook. Set by ReviseScript vs. CreateScript/
+// RetryScript respectively; cleared again by ScriptStore.SetDone once
+// applied, so it never lingers into an unrelated later regeneration.
 func (h *ScriptHandler) runGeneration(ctx context.Context, job *models.ScriptJob) {
 	settings, err := h.settings.Get(ctx)
 	if err != nil {
 		_ = h.store.SetFailed(ctx, job.ID, "could not load settings")
 		return
 	}
-
 	aiClient := ai.NewClientFromSettings(settings)
+
+	if job.RevisionFeedback != "" && len(job.ScriptJSON) > 0 {
+		var existing models.Script
+		if err := json.Unmarshal(job.ScriptJSON, &existing); err != nil {
+			_ = h.store.SetFailed(ctx, job.ID, "could not read existing script for revision")
+			return
+		}
+		revised, err := aiClient.ReviseScript(ctx, existing, job.RevisionFeedback)
+		if err != nil {
+			_ = h.store.SetFailed(ctx, job.ID, err.Error())
+			return
+		}
+		_ = h.store.SetDone(ctx, job.ID, *revised)
+		return
+	}
+
 	script, err := aiClient.GenerateScript(ctx, models.ScriptRequest{
 		Title:          job.IdeaTitle,
 		Description:    job.IdeaDescription,

@@ -30,11 +30,18 @@ type settingsResponse struct {
 	// NineRouterBaseURL is not a secret, so — unlike the *Set/*Preview pairs
 	// above — it's returned as the plain value, always present (possibly
 	// empty, meaning "use the default").
-	NineRouterBaseURL string    `json:"ninerouterBaseUrl"`
-	AIProvider        string    `json:"aiProvider"`
-	AIModel           string    `json:"aiModel"`
-	MaxVideos         int       `json:"maxVideos"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	NineRouterBaseURL         string `json:"ninerouterBaseUrl"`
+	AIProvider                string `json:"aiProvider"`
+	AIModel                   string `json:"aiModel"`
+	GoogleClientIDSet         bool   `json:"googleClientIdSet"`
+	GoogleClientIDPreview     string `json:"googleClientIdPreview,omitempty"`
+	GoogleClientSecretSet     bool   `json:"googleClientSecretSet"`
+	GoogleClientSecretPreview string `json:"googleClientSecretPreview,omitempty"`
+	// Not a secret (a plain callback URL), so returned as-is like
+	// NineRouterBaseURL above.
+	GoogleOAuthRedirectURL string    `json:"googleOauthRedirectUrl"`
+	MaxVideos              int       `json:"maxVideos"`
+	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 func maskKey(key string) string {
@@ -52,12 +59,13 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := settingsResponse{
-		Configured:        s.IsConfigured(),
-		NineRouterBaseURL: s.NineRouterBaseURL,
-		AIProvider:        s.AIProviderResolved(),
-		AIModel:           s.AIModel,
-		MaxVideos:         s.MaxVideos,
-		UpdatedAt:         s.UpdatedAt,
+		Configured:             s.IsConfigured(),
+		NineRouterBaseURL:      s.NineRouterBaseURL,
+		AIProvider:             s.AIProviderResolved(),
+		AIModel:                s.AIModel,
+		GoogleOAuthRedirectURL: s.GoogleOAuthRedirectURL,
+		MaxVideos:              s.MaxVideos,
+		UpdatedAt:              s.UpdatedAt,
 	}
 	if s.YouTubeAPIKey != "" {
 		resp.YouTubeAPIKeySet = true
@@ -75,18 +83,29 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.NineRouterAPIKeySet = true
 		resp.NineRouterAPIKeyPreview = maskKey(s.NineRouterAPIKey)
 	}
+	if s.GoogleClientID != "" {
+		resp.GoogleClientIDSet = true
+		resp.GoogleClientIDPreview = maskKey(s.GoogleClientID)
+	}
+	if s.GoogleClientSecret != "" {
+		resp.GoogleClientSecretSet = true
+		resp.GoogleClientSecretPreview = maskKey(s.GoogleClientSecret)
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 type updateSettingsRequest struct {
-	YouTubeAPIKey     *string `json:"youtubeApiKey"`
-	DeepSeekAPIKey    *string `json:"deepseekApiKey"`
-	OpenRouterAPIKey  *string `json:"openrouterApiKey"`
-	NineRouterAPIKey  *string `json:"ninerouterApiKey"`
-	NineRouterBaseURL *string `json:"ninerouterBaseUrl"`
-	AIProvider        *string `json:"aiProvider"`
-	AIModel           *string `json:"aiModel"`
-	MaxVideos         *int    `json:"maxVideos"`
+	YouTubeAPIKey          *string `json:"youtubeApiKey"`
+	DeepSeekAPIKey         *string `json:"deepseekApiKey"`
+	OpenRouterAPIKey       *string `json:"openrouterApiKey"`
+	NineRouterAPIKey       *string `json:"ninerouterApiKey"`
+	NineRouterBaseURL      *string `json:"ninerouterBaseUrl"`
+	AIProvider             *string `json:"aiProvider"`
+	AIModel                *string `json:"aiModel"`
+	GoogleClientID         *string `json:"googleClientId"`
+	GoogleClientSecret     *string `json:"googleClientSecret"`
+	GoogleOAuthRedirectURL *string `json:"googleOauthRedirectUrl"`
+	MaxVideos              *int    `json:"maxVideos"`
 }
 
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +150,16 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 			or := ai.ProviderOpenRouter
 			patch.AIProvider = &or
 		}
+	}
+	if req.GoogleClientID != nil && *req.GoogleClientID != "" {
+		patch.GoogleClientID = req.GoogleClientID
+	}
+	if req.GoogleClientSecret != nil && *req.GoogleClientSecret != "" {
+		patch.GoogleClientSecret = req.GoogleClientSecret
+	}
+	// Not a secret, same reasoning as NineRouterBaseURL above.
+	if req.GoogleOAuthRedirectURL != nil {
+		patch.GoogleOAuthRedirectURL = req.GoogleOAuthRedirectURL
 	}
 	if req.MaxVideos != nil && *req.MaxVideos > 0 {
 		patch.MaxVideos = req.MaxVideos

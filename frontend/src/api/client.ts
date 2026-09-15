@@ -2,6 +2,9 @@ import type {
   Analysis,
   ChannelAnalytics,
   ConnectedChannel,
+  MusicPromptJob,
+  MusicPromptRequest,
+  Script,
   ScriptJob,
   ScriptRequest,
   Settings,
@@ -11,6 +14,7 @@ import type {
   VideoCategory,
   VideoPrompt,
   VideoPromptRequest,
+  VideoPromptSeries,
   VideoPromptSeriesJob,
   VideoPromptSeriesRequest,
 } from '../types'
@@ -233,6 +237,36 @@ export async function retryVideoPromptSeriesJob(id: string): Promise<VideoPrompt
   return handle(res)
 }
 
+// reviseVideoPromptSeriesJob queues a human-written note against an
+// already-generated series — puts the job back at "pending" (like retry),
+// but the next stepVideoPromptSeriesJob call asks the AI to edit the
+// existing series per the note instead of generating a fresh one.
+export async function reviseVideoPromptSeriesJob(
+  id: string,
+  feedback: string,
+): Promise<VideoPromptSeriesJob> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series/${id}/revise`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ feedback }),
+  })
+  return handle(res)
+}
+
+// updateVideoPromptSeriesJob saves a series a human edited directly in the
+// UI — synchronous, no AI call involved.
+export async function updateVideoPromptSeriesJob(
+  id: string,
+  series: VideoPromptSeries,
+): Promise<VideoPromptSeriesJob> {
+  const res = await fetch(`${API_BASE}/api/videos/prompt-series/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(series),
+  })
+  return handle(res)
+}
+
 // createScriptJob queues a script-generation job and returns it immediately
 // at "pending" — like createAnalysis, the caller drives it forward via
 // stepScriptJob on a poll loop (no backend background worker; see
@@ -271,8 +305,77 @@ export async function retryScriptJob(id: string): Promise<ScriptJob> {
   return handle(res)
 }
 
+// reviseScriptJob queues a human-written note against an already-generated
+// script — puts the job back at "pending" (like retry), but the next
+// stepScriptJob call asks the AI to edit the existing script per the note
+// instead of generating a fresh one.
+export async function reviseScriptJob(id: string, feedback: string): Promise<ScriptJob> {
+  const res = await fetch(`${API_BASE}/api/scripts/${id}/revise`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ feedback }),
+  })
+  return handle(res)
+}
+
+// updateScriptJob saves a script a human edited directly in the UI —
+// synchronous, no AI call involved.
+export async function updateScriptJob(id: string, script: Script): Promise<ScriptJob> {
+  const res = await fetch(`${API_BASE}/api/scripts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(script),
+  })
+  return handle(res)
+}
+
 export async function deleteScriptJob(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/scripts/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  await handle(res)
+}
+
+// createMusicPromptJob queues a Google Flow Music prompt job and returns it
+// immediately at "pending" — like createScriptJob, the caller drives it
+// forward via stepMusicPromptJob on a poll loop (no backend background
+// worker; see stepAnalysis for why).
+export async function createMusicPromptJob(req: MusicPromptRequest): Promise<MusicPromptJob> {
+  const res = await fetch(`${API_BASE}/api/music-prompts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(req),
+  })
+  return handle(res)
+}
+
+export async function stepMusicPromptJob(id: string): Promise<MusicPromptJob> {
+  const res = await fetch(`${API_BASE}/api/music-prompts/${id}/step`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handle(res)
+}
+
+export async function listMusicPromptJobs(): Promise<MusicPromptJob[]> {
+  const res = await fetch(`${API_BASE}/api/music-prompts`, { headers: authHeaders() })
+  return handle(res)
+}
+
+// retryMusicPromptJob puts a failed job back at "pending" in place (same id,
+// error cleared) rather than creating a new one. The caller then resumes the
+// normal stepMusicPromptJob poll loop to retry generation.
+export async function retryMusicPromptJob(id: string): Promise<MusicPromptJob> {
+  const res = await fetch(`${API_BASE}/api/music-prompts/${id}/retry`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handle(res)
+}
+
+export async function deleteMusicPromptJob(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/music-prompts/${id}`, {
     method: 'DELETE',
     headers: authHeaders(),
   })

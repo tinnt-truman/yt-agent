@@ -1,0 +1,3 @@
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS google_client_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS google_client_secret TEXT NOT NULL DEFAULT '';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS google_oauth_redirect_url TEXT NOT NULL DEFAULT '';

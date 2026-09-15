@@ -8,20 +8,18 @@ import (
 	"golang.org/x/oauth2"
 
 	"ytagent/backend/internal/analytics"
-	"ytagent/backend/internal/config"
 	"ytagent/backend/internal/db"
 	"ytagent/backend/internal/googleoauth"
 	"ytagent/backend/internal/models"
 )
 
 type ChannelsHandler struct {
-	cfg      *config.Config
 	channels *db.ConnectedChannelStore
 	settings *db.SettingsStore
 }
 
-func NewChannelsHandler(cfg *config.Config, channels *db.ConnectedChannelStore, settings *db.SettingsStore) *ChannelsHandler {
-	return &ChannelsHandler{cfg: cfg, channels: channels, settings: settings}
+func NewChannelsHandler(channels *db.ConnectedChannelStore, settings *db.SettingsStore) *ChannelsHandler {
+	return &ChannelsHandler{channels: channels, settings: settings}
 }
 
 func (h *ChannelsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +78,12 @@ func (h *ChannelsHandler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oauthCfg, err := googleoauth.NewOAuthConfig(h.cfg)
+	settings, err := h.settings.Get(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load settings")
+		return
+	}
+	oauthCfg, err := googleoauth.NewOAuthConfig(settings.GoogleClientID, settings.GoogleClientSecret, settings.GoogleOAuthRedirectURL)
 	if err != nil {
 		writeError(w, http.StatusPreconditionFailed, err.Error())
 		return
@@ -101,12 +104,6 @@ func (h *ChannelsHandler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "could not persist refreshed token")
 			return
 		}
-	}
-
-	settings, err := h.settings.Get(ctx)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not load settings")
-		return
 	}
 
 	client := googleoauth.HTTPClient(ctx, oauthCfg, fresh)

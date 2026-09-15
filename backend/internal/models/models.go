@@ -43,11 +43,21 @@ type Settings struct {
 	// the default" — 9Router assumed to run on the same machine as this
 	// backend — resolved in ai.NewClientFromSettings, not here, so the zero
 	// value stays a plain empty string rather than a baked-in URL.
-	NineRouterBaseURL string    `json:"ninerouterBaseUrl"`
-	AIProvider        string    `json:"aiProvider"`
-	AIModel           string    `json:"aiModel"`
-	MaxVideos         int       `json:"maxVideos"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	NineRouterBaseURL string `json:"ninerouterBaseUrl"`
+	AIProvider        string `json:"aiProvider"`
+	AIModel           string `json:"aiModel"`
+	// Google OAuth ("Kênh của tôi" — connect a real YouTube channel for
+	// private Analytics/revenue data). Editable from the config page, like
+	// the AI credentials above — env vars only seed these on first boot (see
+	// SettingsStore.SeedFromEnv), matching the rest of this struct.
+	GoogleClientID     string `json:"-"`
+	GoogleClientSecret string `json:"-"`
+	// Not a secret (it's a plain callback URL the operator copies into
+	// Google Cloud Console), so — like NineRouterBaseURL — it's returned to
+	// the frontend as-is rather than masked.
+	GoogleOAuthRedirectURL string    `json:"googleOauthRedirectUrl"`
+	MaxVideos              int       `json:"maxVideos"`
+	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 // AIProviderResolved normalizes the provider, defaulting old rows to deepseek.
@@ -384,6 +394,14 @@ type Character struct {
 // clip stays visually and narratively consistent, plus one text-to-video
 // prompt per episode.
 type VideoPromptSeries struct {
+	// SeriesTitle is an AI-invented title, deliberately distinct from the
+	// (possibly copyrighted) reference video's real title — see
+	// videoPromptSeriesSystemPromptTemplate. Omitted by series generated
+	// before this field existed; callers fall back to
+	// VideoPromptSeriesJob.VideoTitle in that case. Named "SeriesTitle"
+	// rather than "Title" to stay unambiguous next to VideoPromptEpisode's
+	// own per-episode Title.
+	SeriesTitle    string               `json:"seriesTitle,omitempty"`
 	Genre          string               `json:"genre"`
 	TargetAudience string               `json:"targetAudience"`
 	Logline        string               `json:"logline"`
@@ -417,8 +435,60 @@ type VideoPromptSeriesJob struct {
 	Status           VideoPromptSeriesJobStatus `json:"status"`
 	ErrorMessage     string                     `json:"errorMessage,omitempty"`
 	SeriesJSON       json.RawMessage            `json:"series,omitempty"`
-	CreatedAt        time.Time                  `json:"createdAt"`
-	UpdatedAt        time.Time                  `json:"updatedAt"`
+	// RevisionFeedback mirrors ScriptJob.RevisionFeedback — see its comment.
+	RevisionFeedback string    `json:"revisionFeedback,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+// MusicPromptRequest carries the metadata of one existing video used as the
+// reference for generating a Google Flow Music background-track prompt.
+type MusicPromptRequest struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// MusicPrompt is an AI-generated prompt for Google Flow Music describing a
+// background track inspired by — not a reproduction of — the reference
+// video's topic/mood, plus a short suggested lyric snippet.
+type MusicPrompt struct {
+	// Prompt is written in English on purpose, same reasoning as
+	// VideoPrompt.Prompt: current AI music generators are trained
+	// overwhelmingly on English descriptions and follow them more reliably.
+	Prompt       string   `json:"prompt"`
+	Genre        string   `json:"genre"`
+	MoodTags     []string `json:"moodTags"`
+	DurationHint string   `json:"durationHint"`
+	// LyricsHint is a short suggested lyric snippet (e.g. a hook or
+	// intro/outro line) matching the video's theme — omitted when the track
+	// is purely instrumental.
+	LyricsHint string `json:"lyricsHint,omitempty"`
+}
+
+type MusicPromptJobStatus string
+
+const (
+	MusicPromptStatusPending MusicPromptJobStatus = "pending"
+	MusicPromptStatusDone    MusicPromptJobStatus = "done"
+	MusicPromptStatusFailed  MusicPromptJobStatus = "failed"
+)
+
+// MusicPromptJob is the persisted row for one generate-a-music-prompt job.
+// Queued and advanced one step at a time — like ScriptJob and
+// VideoPromptSeriesJob — rather than generated synchronously in the create
+// request, so a slow AI call never ties up that request, and so the
+// frontend gets a persisted history of past prompts to revisit.
+type MusicPromptJob struct {
+	ID               string               `json:"id"`
+	VideoTitle       string               `json:"videoTitle"`
+	VideoDescription string               `json:"videoDescription,omitempty"`
+	VideoTags        []string             `json:"videoTags,omitempty"`
+	Status           MusicPromptJobStatus `json:"status"`
+	ErrorMessage     string               `json:"errorMessage,omitempty"`
+	MusicPromptJSON  json.RawMessage      `json:"musicPrompt,omitempty"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	UpdatedAt        time.Time            `json:"updatedAt"`
 }
 
 // ScriptRequest carries one content idea (from a generated strategy) used as
@@ -481,6 +551,11 @@ type ScriptScene struct {
 // Script is an AI-generated scene-by-scene script for producing one video —
 // either a long-form video (5-10 minutes) or a Short (60 seconds).
 type Script struct {
+	// Title is an AI-invented title, deliberately distinct from the (possibly
+	// copyrighted, e.g. a re-upped movie's real name) input idea title — see
+	// scriptSystemPrompt. Omitted by scripts generated before this field
+	// existed; callers fall back to ScriptJob.IdeaTitle in that case.
+	Title          string            `json:"title,omitempty"`
 	Hook           string            `json:"hook"`
 	Characters     []ScriptCharacter `json:"characters,omitempty"`
 	Scenes         []ScriptScene     `json:"scenes"`
@@ -512,6 +587,13 @@ type ScriptJob struct {
 	Status          ScriptJobStatus `json:"status"`
 	ErrorMessage    string          `json:"errorMessage,omitempty"`
 	ScriptJSON      json.RawMessage `json:"script,omitempty"`
-	CreatedAt       time.Time       `json:"createdAt"`
-	UpdatedAt       time.Time       `json:"updatedAt"`
+	// RevisionFeedback is a human-written note queued via the "revise"
+	// endpoint (set alongside Status flipping back to pending). The next
+	// Step call reads it, asks the AI to revise the existing ScriptJSON
+	// accordingly instead of generating from scratch, then clears it.
+	// Exposed to the frontend so it can show what feedback is being applied
+	// while the job is pending.
+	RevisionFeedback string    `json:"revisionFeedback,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }

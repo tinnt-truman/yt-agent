@@ -339,6 +339,8 @@ func (c *Client) GenerateVideoPrompt(ctx context.Context, req models.VideoPrompt
 // human to do.
 const videoPromptSeriesSystemPromptTemplate = `Bạn là biên kịch kiêm đạo diễn cho phim ngắn nhiều tập tạo bằng AI text-to-video (Kling, Google Flow, Runway, Sora...). Bạn sẽ nhận thông tin (tiêu đề, mô tả, tag) của MỘT video YouTube tham khảo. Nhiệm vụ: sáng tác một câu chuyện MỚI, có cốt truyện rõ ràng, chia thành đúng %d tập — LẤY CẢM HỨNG từ chủ đề/không khí của video tham khảo nhưng KHÔNG sao chép cốt truyện, nhân vật hay chi tiết cụ thể của video/bộ phim gốc.
 
+QUAN TRỌNG — tránh vi phạm bản quyền: tiêu đề/mô tả video tham khảo có thể lấy nguyên văn từ một video, bộ phim hoặc chương trình có thật. Tên nhân vật bạn đặt trong "characters" PHẢI hoàn toàn do bạn tự nghĩ ra — không được trùng hay là biến thể dễ nhận ra của tên nhân vật có thật (phim, truyện, game, thương hiệu...), kể cả khi video tham khảo nhắc đến nhân vật đó. Bạn cũng phải tự đặt "seriesTitle" — một tiêu đề MỚI cho cả series, chỉ giữ lại chủ đề/ngách chung chung, KHÔNG giữ nguyên hoặc gần giống tên riêng/tên phim/tên thương hiệu ở tiêu đề video tham khảo.
+
 Trước khi viết tập nào, hãy chốt "story bible":
 - "genre": 2-3 thể loại ghép lại, mỗi thể loại một cụm ngắn (vd: "giả tưởng cổ đại + phản thần thoại + thế giới phản địa ngục")
 - "targetAudience": đối tượng khán giả hướng đến (vd: "Hướng nam giới, dòng chính thống")
@@ -375,6 +377,7 @@ Các cảnh trong một tập phải nối tiếp nhau mạch lạc và dựng l
 Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
 
 {
+  "seriesTitle": "string, tiêu đề MỚI do bạn tự đặt cho cả series — khác biệt với tiêu đề video tham khảo, không dùng tên phim/nhân vật/thương hiệu có thật",
   "genre": "string",
   "targetAudience": "string",
   "logline": "string",
@@ -468,6 +471,64 @@ func (c *Client) GenerateVideoPromptSeries(ctx context.Context, req models.Video
 	return &out, nil
 }
 
+// videoPromptSeriesReviseSystemPromptTemplate reuses
+// videoPromptSeriesSystemPromptTemplate's full ruleset (story-bible-first
+// method, copyright-safe character-name/title rules, per-episode structure,
+// JSON schema) — it still takes the same 5 %d args (episodeCount x2,
+// scenesPerEpisode x2, episodeCount) — appending only the revise-specific
+// instruction: edit the existing series from a human note rather than
+// invent one from a reference video.
+const videoPromptSeriesReviseSystemPromptTemplate = videoPromptSeriesSystemPromptTemplate + `
+
+Bạn sẽ KHÔNG nhận thông tin video tham khảo mới. Thay vào đó, bạn nhận series HIỆN TẠI (JSON, đúng cấu trúc ở trên) và một GÓP Ý chỉnh sửa từ con người. Nhiệm vụ: chỉnh sửa lại series theo đúng góp ý đó — giữ nguyên số tập, số cảnh mỗi tập, và mọi phần không liên quan đến góp ý (bao gồm "seriesTitle" nếu góp ý không nhắc đến việc đổi tiêu đề). Vẫn phải tuân thủ đầy đủ mọi quy tắc ở trên.
+
+Trả về DUY NHẤT series JSON đã chỉnh sửa, đúng cấu trúc đã mô tả, không thêm giải thích.`
+
+// ReviseVideoPromptSeries asks the AI to edit an already-generated series
+// according to a human-written note, rather than generating a fresh one —
+// the "revise with feedback" counterpart to RetryVideoPromptSeries'/
+// CreateVideoPromptSeries' from-scratch generation. episodeCount/
+// scenesPerEpisode come from the job row (set once at creation, see
+// ClampVideoPromptSeriesDimensions) rather than being re-derived from
+// `existing`, so they stay correct even if the AI's last output happened to
+// omit an episode or scene.
+func (c *Client) ReviseVideoPromptSeries(
+	ctx context.Context, existing models.VideoPromptSeries, feedback string, episodeCount, scenesPerEpisode int,
+) (*models.VideoPromptSeries, error) {
+	existingJSON, err := json.Marshal(existing)
+	if err != nil {
+		return nil, fmt.Errorf("marshal existing video prompt series: %w", err)
+	}
+
+	systemPrompt := fmt.Sprintf(videoPromptSeriesReviseSystemPromptTemplate,
+		episodeCount, episodeCount, scenesPerEpisode, scenesPerEpisode, episodeCount)
+	userContent := fmt.Sprintf(
+		"Series hiện tại (JSON):\n%s\n\nGóp ý chỉnh sửa từ con người:\n%s\n\nHãy chỉnh sửa series theo đúng góp ý trên, giữ nguyên mọi phần khác.",
+		string(existingJSON), feedback,
+	)
+
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userContent},
+		},
+		ResponseFormat: c.jsonMode(),
+		MaxTokens:      videoPromptSeriesMaxTokens(episodeCount, scenesPerEpisode),
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.VideoPromptSeries
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse revised video prompt series JSON: %w", err)
+	}
+	return &out, nil
+}
+
 // videoPromptSeriesMaxTokens sizes the output budget for a multi-episode
 // series: a 2-4 character cast (~150-250 tokens each) plus, per episode, a
 // small title/plotSummary/negativePrompt and, per scene (bounded to at most
@@ -503,7 +564,59 @@ func videoPromptSeriesMaxTokens(episodeCount, scenesPerEpisode int) int {
 	return tokens
 }
 
+const musicPromptSystemPrompt = `Bạn là nhạc sĩ kiêm chuyên gia viết prompt cho công cụ AI tạo nhạc Google Flow Music. Bạn sẽ nhận thông tin (tiêu đề, mô tả, tag) của MỘT video YouTube tham khảo. Nhiệm vụ: viết một prompt MỚI để tạo nhạc nền phù hợp với chủ đề/không khí của video tham khảo nhưng KHÔNG sao chép giai điệu, ca từ hay chi tiết cụ thể của bài hát/video gốc — chỉ lấy cảm hứng về chủ đề, tâm trạng.
+
+Trường "prompt" PHẢI viết bằng tiếng Anh (mô hình tạo nhạc AI hiện tại hiểu và bám sát prompt tiếng Anh tốt hơn hẳn tiếng Việt) — mô tả cụ thể: thể loại, nhạc cụ, tempo/BPM, không khí/cảm xúc, cấu trúc (intro/verse/chorus/outro nếu phù hợp), đủ chi tiết để AI tạo ra một bản nhạc rõ ràng, không quá 100 từ.
+
+Trường "genre" và "durationHint" viết bằng tiếng Việt. "moodTags" là 3-5 từ khoá tâm trạng ngắn gọn bằng tiếng Việt.
+
+Trường "lyricsHint": viết một đoạn lời bài hát NGẮN (vd 2-4 câu, dùng cho intro/hook/outro), phù hợp chủ đề video, bằng tiếng Việt trừ khi chủ đề video rõ ràng hợp với ngôn ngữ khác hơn. Nếu bản nhạc nên là nhạc không lời (instrumental), để trống trường này.
+
+Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
+
+{
+  "prompt": "string, tiếng Anh, mô tả chi tiết bản nhạc cho AI tạo nhạc",
+  "genre": "string, tiếng Việt, thể loại nhạc",
+  "moodTags": ["string", "..."],
+  "durationHint": "string, tiếng Việt, độ dài gợi ý",
+  "lyricsHint": "string, tiếng Việt, đoạn lời ngắn gợi ý (để trống nếu nhạc không lời)"
+}`
+
+// GenerateMusicPrompt writes a Google Flow Music prompt inspired by one
+// reference video's topic/mood — not a reproduction of it. Standalone and
+// on-demand (like GenerateVideoPrompt): the caller already has the video's
+// metadata, so this needs no extra YouTube API call.
+func (c *Client) GenerateMusicPrompt(ctx context.Context, req models.MusicPromptRequest) (*models.MusicPrompt, error) {
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal music prompt request: %w", err)
+	}
+
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: musicPromptSystemPrompt},
+			{Role: "user", Content: fmt.Sprintf("Video tham khảo (JSON):\n%s", string(reqJSON))},
+		},
+		ResponseFormat: c.jsonMode(),
+		MaxTokens:      1500,
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.MusicPrompt
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse music prompt JSON: %w", err)
+	}
+	return &out, nil
+}
+
 const scriptSystemPrompt = `Bạn là biên kịch kiêm đạo diễn video YouTube chuyên nghiệp. Bạn sẽ nhận một ý tưởng nội dung (tiêu đề, mô tả, hook) và định dạng thời lượng mong muốn. Nhiệm vụ: viết kịch bản chi tiết theo từng cảnh, đúng phong cách kịch bản quay chuyên nghiệp (shooting script) — không phải một danh sách hình ảnh + lời thoại đơn giản.
+
+QUAN TRỌNG — tránh vi phạm bản quyền: tiêu đề/mô tả/hook đầu vào có thể lấy nguyên văn từ một video, bộ phim hoặc chương trình có thật (vd video re-up, phim đã phát hành). Trường "title" bạn trả về PHẢI là một tiêu đề HOÀN TOÀN MỚI do bạn tự nghĩ ra — chỉ giữ lại chủ đề/ngách chung chung, KHÔNG được giữ nguyên hoặc gần giống tên riêng, tên phim, tên chương trình, tên thương hiệu ở đầu vào. Nếu liệt kê nhân vật trong "characters", tên nhân vật cũng PHẢI do bạn tự đặt mới — không dùng tên nhân vật có thật từ phim/truyện/thương hiệu nào, kể cả khi ý tưởng đầu vào nhắc đến nhân vật đó.
 
 Nếu ý tưởng có nhân vật cụ thể (phim ngắn, hoạt hình, tiểu phẩm, review có host xuyên suốt...), hãy liệt kê nhân vật trong mảng "characters", mỗi nhân vật gồm:
 - "name": tên nhân vật
@@ -531,6 +644,7 @@ Viết bằng tiếng Việt, giọng văn tự nhiên, phù hợp để ngườ
 Trả về DUY NHẤT một object JSON hợp lệ theo cấu trúc sau, không thêm markdown hay giải thích ngoài JSON:
 
 {
+  "title": "string, tiêu đề MỚI do bạn tự đặt cho video này — khác biệt với tiêu đề đầu vào, không dùng tên phim/nhân vật/thương hiệu có thật",
   "hook": "string, câu mở đầu gây chú ý trong 3-5 giây đầu",
   "characters": [
     {"name": "string", "role": "string", "appearance": "string", "coreTags": ["string"], "personalInfo": "string", "personality": "string"}
@@ -578,6 +692,54 @@ func (c *Client) GenerateScript(ctx context.Context, req models.ScriptRequest) (
 	var out models.Script
 	if err := json.Unmarshal([]byte(text), &out); err != nil {
 		return nil, fmt.Errorf("parse script JSON: %w", err)
+	}
+	return &out, nil
+}
+
+// scriptReviseSystemPrompt reuses scriptSystemPrompt's full ruleset (scene
+// shape, copyright-safe title/character-name rules, JSON schema) so a
+// revision can't accidentally relax any of it, appending only the
+// revise-specific instruction: edit in place from a human note rather than
+// invent a script from an idea.
+const scriptReviseSystemPrompt = scriptSystemPrompt + `
+
+Bạn sẽ KHÔNG nhận một ý tưởng nội dung mới. Thay vào đó, bạn nhận kịch bản HIỆN TẠI (JSON, đúng cấu trúc ở trên) và một GÓP Ý chỉnh sửa từ con người. Nhiệm vụ: chỉnh sửa lại kịch bản theo đúng góp ý đó — giữ nguyên mọi phần không liên quan đến góp ý (bao gồm "title" nếu góp ý không nhắc đến việc đổi tiêu đề), chỉ thay đổi phần được yêu cầu. Vẫn phải tuân thủ đầy đủ mọi quy tắc ở trên.
+
+Trả về DUY NHẤT kịch bản JSON đã chỉnh sửa, đúng cấu trúc đã mô tả, không thêm giải thích.`
+
+// ReviseScript asks the AI to edit an already-generated script according to
+// a human-written note (e.g. "cảnh 3 dài quá, rút gọn"), rather than
+// generating a fresh one — used by the "revise with feedback" flow, as
+// opposed to RetryScript's/CreateScript's from-scratch generation.
+func (c *Client) ReviseScript(ctx context.Context, existing models.Script, feedback string) (*models.Script, error) {
+	existingJSON, err := json.Marshal(existing)
+	if err != nil {
+		return nil, fmt.Errorf("marshal existing script: %w", err)
+	}
+
+	userContent := fmt.Sprintf(
+		"Kịch bản hiện tại (JSON):\n%s\n\nGóp ý chỉnh sửa từ con người:\n%s\n\nHãy chỉnh sửa kịch bản theo đúng góp ý trên, giữ nguyên mọi phần khác.",
+		string(existingJSON), feedback,
+	)
+
+	reqBody := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: scriptReviseSystemPrompt},
+			{Role: "user", Content: userContent},
+		},
+		ResponseFormat: c.jsonMode(),
+		MaxTokens:      scriptMaxTokens(existing.DurationFormat),
+	}
+
+	text, err := c.chat(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var out models.Script
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse revised script JSON: %w", err)
 	}
 	return &out, nil
 }

@@ -10,6 +10,7 @@ func NewRouter(
 	ch *ChannelsHandler,
 	vph *VideoPromptHandler,
 	sch *ScriptHandler,
+	mph *MusicPromptHandler,
 	ah *AuthHandler,
 	corsOrigins []string,
 	appPassword string,
@@ -38,13 +39,23 @@ func NewRouter(
 	protected.HandleFunc("GET /api/videos/prompt-series/{id}", vph.GetVideoPromptSeries)
 	protected.HandleFunc("POST /api/videos/prompt-series/{id}/step", vph.AdvanceVideoPromptSeriesStep)
 	protected.HandleFunc("POST /api/videos/prompt-series/{id}/retry", vph.RetryVideoPromptSeries)
+	protected.HandleFunc("POST /api/videos/prompt-series/{id}/revise", vph.ReviseVideoPromptSeries)
+	protected.HandleFunc("PUT /api/videos/prompt-series/{id}", vph.UpdateVideoPromptSeries)
 	protected.HandleFunc("DELETE /api/videos/prompt-series/{id}", vph.DeleteVideoPromptSeries)
 	protected.HandleFunc("POST /api/scripts", sch.CreateScript)
 	protected.HandleFunc("GET /api/scripts", sch.ListScripts)
 	protected.HandleFunc("GET /api/scripts/{id}", sch.GetScript)
 	protected.HandleFunc("POST /api/scripts/{id}/step", sch.AdvanceStep)
 	protected.HandleFunc("POST /api/scripts/{id}/retry", sch.RetryScript)
+	protected.HandleFunc("POST /api/scripts/{id}/revise", sch.ReviseScript)
+	protected.HandleFunc("PUT /api/scripts/{id}", sch.UpdateScript)
 	protected.HandleFunc("DELETE /api/scripts/{id}", sch.DeleteScript)
+	protected.HandleFunc("POST /api/music-prompts", mph.CreateMusicPrompt)
+	protected.HandleFunc("GET /api/music-prompts", mph.ListMusicPrompts)
+	protected.HandleFunc("GET /api/music-prompts/{id}", mph.GetMusicPrompt)
+	protected.HandleFunc("POST /api/music-prompts/{id}/step", mph.AdvanceMusicPromptStep)
+	protected.HandleFunc("POST /api/music-prompts/{id}/retry", mph.RetryMusicPrompt)
+	protected.HandleFunc("DELETE /api/music-prompts/{id}", mph.DeleteMusicPrompt)
 
 	mux := http.NewServeMux()
 	// Registered directly on the outer mux (not under requireAuth): login

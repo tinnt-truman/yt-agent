@@ -18,8 +18,6 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-
-	"ytagent/backend/internal/config"
 )
 
 // Scopes requested at consent time. youtube.readonly identifies which
@@ -40,15 +38,18 @@ var stateTTL = 10 * time.Minute
 
 // NewOAuthConfig is nil (with an error) if the operator hasn't configured
 // Google OAuth yet — callers surface that as a clear "not configured" error
-// rather than the app failing to boot over an optional feature.
-func NewOAuthConfig(cfg *config.Config) (*oauth2.Config, error) {
-	if cfg.GoogleClientID == "" || cfg.GoogleClientSecret == "" || cfg.GoogleRedirectURL == "" {
-		return nil, fmt.Errorf("Google OAuth chưa được cấu hình (thiếu GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URL)")
+// rather than the app failing to boot over an optional feature. Takes the
+// three credential values directly (rather than internal/config.Config) so
+// callers can source them from the settings table — editable from the
+// config page — instead of only boot-time env vars.
+func NewOAuthConfig(clientID, clientSecret, redirectURL string) (*oauth2.Config, error) {
+	if clientID == "" || clientSecret == "" || redirectURL == "" {
+		return nil, fmt.Errorf("Google OAuth chưa được cấu hình (thiếu Client ID/Client Secret/Redirect URL) — vào trang Cài đặt để cấu hình")
 	}
 	return &oauth2.Config{
-		ClientID:     cfg.GoogleClientID,
-		ClientSecret: cfg.GoogleClientSecret,
-		RedirectURL:  cfg.GoogleRedirectURL,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  redirectURL,
 		Scopes:       scopes,
 		Endpoint:     google.Endpoint,
 	}, nil

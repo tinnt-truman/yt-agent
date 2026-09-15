@@ -37,13 +37,14 @@ func (s *VideoPromptSeriesStore) Create(
 	return id, err
 }
 
+// SetDone also clears revision_feedback — see ScriptStore.SetDone for why.
 func (s *VideoPromptSeriesStore) SetDone(ctx context.Context, id string, series models.VideoPromptSeries) error {
 	raw, err := json.Marshal(series)
 	if err != nil {
 		return err
 	}
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE video_prompt_series SET status = $1, series_json = $2, updated_at = now() WHERE id = $3`,
+		`UPDATE video_prompt_series SET status = $1, series_json = $2, revision_feedback = NULL, updated_at = now() WHERE id = $3`,
 		models.VideoPromptSeriesStatusDone, raw, id,
 	)
 	return err
@@ -59,11 +60,22 @@ func (s *VideoPromptSeriesStore) SetFailed(ctx context.Context, id, errMsg strin
 
 // ResetToPending clears a failed job's error and puts it back at "pending"
 // so the client's next Step call retries generation in place, instead of
-// creating a new history entry for the same request.
+// creating a new history entry for the same request. Also clears any
+// leftover revision_feedback — see ScriptStore.ResetToPending for why.
 func (s *VideoPromptSeriesStore) ResetToPending(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE video_prompt_series SET status = $1, error_message = NULL, updated_at = now() WHERE id = $2`,
+		`UPDATE video_prompt_series SET status = $1, error_message = NULL, revision_feedback = NULL, updated_at = now() WHERE id = $2`,
 		models.VideoPromptSeriesStatusPending, id,
+	)
+	return err
+}
+
+// SetRevisionPending mirrors ScriptStore.SetRevisionPending — see its
+// comment.
+func (s *VideoPromptSeriesStore) SetRevisionPending(ctx context.Context, id, feedback string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE video_prompt_series SET status = $1, error_message = NULL, revision_feedback = $2, updated_at = now() WHERE id = $3`,
+		models.VideoPromptSeriesStatusPending, feedback, id,
 	)
 	return err
 }
@@ -75,15 +87,15 @@ func (s *VideoPromptSeriesStore) Delete(ctx context.Context, id string) error {
 
 func (s *VideoPromptSeriesStore) GetByID(ctx context.Context, id string) (*models.VideoPromptSeriesJob, error) {
 	var j models.VideoPromptSeriesJob
-	var description, errorMessage sql.NullString
+	var description, errorMessage, revisionFeedback sql.NullString
 	var tagsJSON, seriesJSON []byte
 
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, video_title, video_description, video_tags, episode_count, scenes_per_episode, status, error_message,
-		        series_json, created_at, updated_at
+		        series_json, revision_feedback, created_at, updated_at
 		 FROM video_prompt_series WHERE id = $1`, id,
 	).Scan(&j.ID, &j.VideoTitle, &description, &tagsJSON, &j.EpisodeCount, &j.ScenesPerEpisode, &j.Status, &errorMessage,
-		&seriesJSON, &j.CreatedAt, &j.UpdatedAt)
+		&seriesJSON, &revisionFeedback, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +106,7 @@ func (s *VideoPromptSeriesStore) GetByID(ctx context.Context, id string) (*model
 		_ = json.Unmarshal(tagsJSON, &j.VideoTags)
 	}
 	j.SeriesJSON = seriesJSON
+	j.RevisionFeedback = revisionFeedback.String
 	return &j, nil
 }
 
@@ -104,7 +117,7 @@ func (s *VideoPromptSeriesStore) GetByID(ctx context.Context, id string) (*model
 func (s *VideoPromptSeriesStore) ListRecent(ctx context.Context, limit int) ([]models.VideoPromptSeriesJob, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, video_title, video_description, video_tags, episode_count, scenes_per_episode, status, error_message,
-		        series_json, created_at, updated_at
+		        series_json, revision_feedback, created_at, updated_at
 		 FROM video_prompt_series ORDER BY created_at DESC LIMIT $1`, limit,
 	)
 	if err != nil {
@@ -115,10 +128,10 @@ func (s *VideoPromptSeriesStore) ListRecent(ctx context.Context, limit int) ([]m
 	var results []models.VideoPromptSeriesJob
 	for rows.Next() {
 		var j models.VideoPromptSeriesJob
-		var description, errorMessage sql.NullString
+		var description, errorMessage, revisionFeedback sql.NullString
 		var tagsJSON, seriesJSON []byte
 		if err := rows.Scan(&j.ID, &j.VideoTitle, &description, &tagsJSON, &j.EpisodeCount, &j.ScenesPerEpisode, &j.Status,
-			&errorMessage, &seriesJSON, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			&errorMessage, &seriesJSON, &revisionFeedback, &j.CreatedAt, &j.UpdatedAt); err != nil {
 			return nil, err
 		}
 		j.VideoDescription = description.String
@@ -127,6 +140,7 @@ func (s *VideoPromptSeriesStore) ListRecent(ctx context.Context, limit int) ([]m
 			_ = json.Unmarshal(tagsJSON, &j.VideoTags)
 		}
 		j.SeriesJSON = seriesJSON
+		j.RevisionFeedback = revisionFeedback.String
 		results = append(results, j)
 	}
 	return results, rows.Err()

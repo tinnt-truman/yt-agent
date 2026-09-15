@@ -136,3 +136,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
+
+// reviseRequest is the shared body shape for ScriptHandler.ReviseScript and
+// VideoPromptHandler.ReviseVideoPromptSeries.
+type reviseRequest struct {
+	Feedback string `json:"feedback"`
+}

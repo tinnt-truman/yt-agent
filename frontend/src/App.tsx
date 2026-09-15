@@ -4,6 +4,7 @@ import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
 import ScriptsPage from './pages/ScriptsPage'
 import VideoPromptSeriesPage from './pages/VideoPromptSeriesPage'
+import MusicPromptsPage from './pages/MusicPromptsPage'
 import SettingsPage from './pages/SettingsPage'
 import TrendingPage from './pages/TrendingPage'
 import ChannelsPage from './pages/ChannelsPage'
@@ -44,6 +45,7 @@ function AuthGate() {
               <NavTab to="/history">Lịch sử</NavTab>
               <NavTab to="/scripts">Kịch bản</NavTab>
               <NavTab to="/video-prompts">Prompt video</NavTab>
+              <NavTab to="/music-prompts">Prompt nhạc</NavTab>
               <NavTab to="/config">Cài đặt</NavTab>
               <button onClick={logout} className="hover:text-slate-900">
                 Đăng xuất
@@ -78,6 +80,7 @@ function AppRoutes() {
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/scripts" element={<ScriptsPage />} />
       <Route path="/video-prompts" element={<VideoPromptSeriesPage />} />
+      <Route path="/music-prompts" element={<MusicPromptsPage />} />
       <Route path="/config" element={<SettingsPage />} />
     </Routes>
   )

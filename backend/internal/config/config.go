@@ -36,20 +36,27 @@ type Config struct {
 	SeedNineRouterBaseURL string
 	SeedAIProvider        string
 	SeedAIModel           string
-	SeedMaxVideos         int
 
 	// Google OAuth ("Kênh của tôi" — connect a real YouTube channel for
-	// private Analytics/revenue data). Optional at boot: the feature just
-	// returns a clear error until these are set, same pattern as the app
-	// running without AI keys until /config is visited.
-	GoogleClientID     string
-	GoogleClientSecret string
-	// GoogleRedirectURL must exactly match a redirect URI registered on the
-	// OAuth client in Google Cloud Console (this backend's own callback URL,
-	// e.g. https://yt-agent-backend.vercel.app/api/oauth/google/callback).
-	GoogleRedirectURL string
+	// private Analytics/revenue data), also editable from the config page
+	// like the AI credentials above (see internal/db.SettingsStore) — these
+	// three only seed the settings table on first boot, so an existing
+	// deployment that already exports them keeps working without a visit to
+	// /config. The feature returns a clear "not configured" error until
+	// either the env vars or the config page provide them.
+	SeedGoogleClientID     string
+	SeedGoogleClientSecret string
+	// SeedGoogleOAuthRedirectURL must exactly match a redirect URI
+	// registered on the OAuth client in Google Cloud Console (this
+	// backend's own callback URL, e.g.
+	// https://yt-agent-backend.vercel.app/api/oauth/google/callback).
+	SeedGoogleOAuthRedirectURL string
+	SeedMaxVideos              int
+
 	// FrontendURL is where the browser is sent back to after the OAuth
-	// callback completes (e.g. https://yt-agent-fe.vercel.app).
+	// callback completes (e.g. https://yt-agent-fe.vercel.app). Boot-time
+	// only (not in the settings table): it's deployment topology, not a
+	// credential the operator would edit from the config page.
 	FrontendURL string
 }
 
@@ -68,10 +75,10 @@ func Load() (*Config, error) {
 		SeedAIModel:           getEnv("AI_MODEL", "deepseek-v4-pro"),
 		SeedMaxVideos:         50,
 
-		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		GoogleRedirectURL:  os.Getenv("GOOGLE_OAUTH_REDIRECT_URL"),
-		FrontendURL:        os.Getenv("FRONTEND_URL"),
+		SeedGoogleClientID:         os.Getenv("GOOGLE_CLIENT_ID"),
+		SeedGoogleClientSecret:     os.Getenv("GOOGLE_CLIENT_SECRET"),
+		SeedGoogleOAuthRedirectURL: os.Getenv("GOOGLE_OAUTH_REDIRECT_URL"),
+		FrontendURL:                os.Getenv("FRONTEND_URL"),
 	}
 
 	if v := os.Getenv("MAX_VIDEOS"); v != "" {

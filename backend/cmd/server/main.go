@@ -29,8 +29,9 @@ func main() {
 	connectedChannelStore := db.NewConnectedChannelStore(database)
 	scriptStore := db.NewScriptStore(database)
 	videoPromptSeriesStore := db.NewVideoPromptSeriesStore(database)
+	musicPromptStore := db.NewMusicPromptStore(database)
 
-	if err := settingsStore.SeedFromEnv(ctx, cfg.SeedYouTubeAPIKey, cfg.SeedDeepSeekAPIKey, cfg.SeedOpenRouterAPIKey, cfg.SeedNineRouterAPIKey, cfg.SeedNineRouterBaseURL, cfg.SeedAIProvider, cfg.SeedAIModel, cfg.SeedMaxVideos); err != nil {
+	if err := settingsStore.SeedFromEnv(ctx, cfg.SeedYouTubeAPIKey, cfg.SeedDeepSeekAPIKey, cfg.SeedOpenRouterAPIKey, cfg.SeedNineRouterAPIKey, cfg.SeedNineRouterBaseURL, cfg.SeedAIProvider, cfg.SeedAIModel, cfg.SeedGoogleClientID, cfg.SeedGoogleClientSecret, cfg.SeedGoogleOAuthRedirectURL, cfg.SeedMaxVideos); err != nil {
 		log.Fatalf("settings seed error: %v", err)
 	}
 
@@ -38,18 +39,19 @@ func main() {
 	handler := api.NewHandler(store, settingsStore, w)
 	settingsHandler := api.NewSettingsHandler(settingsStore)
 	trendingHandler := api.NewTrendingHandler(settingsStore)
-	oauthHandler := api.NewOAuthHandler(cfg, connectedChannelStore)
-	channelsHandler := api.NewChannelsHandler(cfg, connectedChannelStore, settingsStore)
+	oauthHandler := api.NewOAuthHandler(cfg, settingsStore, connectedChannelStore)
+	channelsHandler := api.NewChannelsHandler(connectedChannelStore, settingsStore)
 	videoPromptHandler := api.NewVideoPromptHandler(settingsStore, videoPromptSeriesStore)
 	scriptHandler := api.NewScriptHandler(settingsStore, scriptStore)
+	musicPromptHandler := api.NewMusicPromptHandler(settingsStore, musicPromptStore)
 	authHandler := api.NewAuthHandler(cfg.AppPassword)
-	router := api.NewRouter(handler, settingsHandler, trendingHandler, oauthHandler, channelsHandler, videoPromptHandler, scriptHandler, authHandler, cfg.CORSOrigins, cfg.AppPassword)
+	router := api.NewRouter(handler, settingsHandler, trendingHandler, oauthHandler, channelsHandler, videoPromptHandler, scriptHandler, musicPromptHandler, authHandler, cfg.CORSOrigins, cfg.AppPassword)
 
 	if cfg.AppPassword == "" {
 		log.Println("warning: APP_PASSWORD is not set — the API is open to anyone who can reach it")
 	}
-	if cfg.GoogleClientID == "" {
-		log.Println("info: Google OAuth not configured — \"Kênh của tôi\" (connected channels) will be unavailable until GOOGLE_CLIENT_ID/SECRET/REDIRECT_URL and FRONTEND_URL are set")
+	if cfg.SeedGoogleClientID == "" {
+		log.Println("info: Google OAuth not seeded from env — \"Kênh của tôi\" (connected channels) will be unavailable until GOOGLE_CLIENT_ID/SECRET/REDIRECT_URL (or the equivalent fields on the config page) and FRONTEND_URL are set")
 	}
 	log.Printf("listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {

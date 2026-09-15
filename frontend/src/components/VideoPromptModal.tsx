@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { createVideoPromptSeriesJob, stepVideoPromptSeriesJob } from '../api/client'
-import type { VideoPromptRequest, VideoPromptSeriesJob } from '../types'
+import {
+  createVideoPromptSeriesJob,
+  reviseVideoPromptSeriesJob,
+  stepVideoPromptSeriesJob,
+  updateVideoPromptSeriesJob,
+} from '../api/client'
+import type { VideoPromptRequest, VideoPromptSeries, VideoPromptSeriesJob } from '../types'
 import { CopyButton } from './CopyButton'
+import { normalizeSeriesForEdit, VideoPromptSeriesEditor } from './VideoPromptSeriesEditor'
+import { ReviseWithFeedback } from './ReviseWithFeedback'
 
 const EPISODE_OPTIONS = [3, 5, 10]
 const SCENES_OPTIONS = [2, 3, 5]
@@ -34,6 +41,9 @@ export function VideoPromptModal({
   }, [episodeCount])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draft, setDraft] = useState<VideoPromptSeries | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [revising, setRevising] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Queued generation: the backend has no background worker (same reason as
@@ -64,6 +74,13 @@ export function VideoPromptModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job?.id])
 
+  // Leaving unsaved edits behind when regenerating (a fresh job replaces
+  // job.id entirely — see handleGenerate) would be surprising — drop the
+  // draft whenever the open job changes.
+  useEffect(() => {
+    setDraft(null)
+  }, [job?.id])
+
   async function handleGenerate() {
     setCreating(true)
     setError(null)
@@ -74,6 +91,40 @@ export function VideoPromptModal({
       setError(err instanceof Error ? err.message : 'Không tạo được prompt')
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function handleRevise(feedback: string) {
+    if (!job) return
+    setError(null)
+    setRevising(true)
+    try {
+      const updated = await reviseVideoPromptSeriesJob(job.id, feedback)
+      setJob(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không gửi được góp ý cho AI')
+    } finally {
+      setRevising(false)
+    }
+  }
+
+  function handleStartEdit(series: VideoPromptSeries) {
+    setError(null)
+    setDraft(normalizeSeriesForEdit(series))
+  }
+
+  async function handleSaveEdit() {
+    if (!job || !draft) return
+    setError(null)
+    setSavingEdit(true)
+    try {
+      const updated = await updateVideoPromptSeriesJob(job.id, draft)
+      setJob(updated)
+      setDraft(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không lưu được prompt')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -174,8 +225,42 @@ export function VideoPromptModal({
           </p>
         )}
 
-        {series && (
+        {series && draft && (
           <div className="mt-4 space-y-3">
+            <VideoPromptSeriesEditor value={draft} onChange={setDraft} />
+            <div className="flex gap-2 border-t border-slate-100 pt-3">
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+                className="rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+              >
+                {savingEdit ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
+              </button>
+              <button
+                onClick={() => setDraft(null)}
+                disabled={savingEdit}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Huỷ
+              </button>
+            </div>
+          </div>
+        )}
+
+        {series && !draft && job && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              {series.seriesTitle && <p className="text-sm font-semibold text-slate-900">{series.seriesTitle}</p>}
+              {job.status !== 'pending' && (
+                <button
+                  onClick={() => handleStartEdit(series)}
+                  className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                >
+                  Chỉnh sửa
+                </button>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs font-medium text-slate-500">Thể loại</p>
@@ -311,6 +396,13 @@ export function VideoPromptModal({
               phần "Ngoại hình" của nhân vật xuất hiện trong cảnh để giữ hình ảnh đồng nhất. Xem lại
               trong trang "Prompt video" ở menu.
             </p>
+
+            {job.status !== 'pending' && (
+              <div className="border-t border-slate-100 pt-3">
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Không ưng ý? Góp ý cho AI</p>
+                <ReviseWithFeedback onSubmit={handleRevise} busy={revising} />
+              </div>
+            )}
           </div>
         )}
       </div>

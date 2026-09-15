@@ -14,11 +14,12 @@ import (
 
 type OAuthHandler struct {
 	cfg      *config.Config
+	settings *db.SettingsStore
 	channels *db.ConnectedChannelStore
 }
 
-func NewOAuthHandler(cfg *config.Config, channels *db.ConnectedChannelStore) *OAuthHandler {
-	return &OAuthHandler{cfg: cfg, channels: channels}
+func NewOAuthHandler(cfg *config.Config, settings *db.SettingsStore, channels *db.ConnectedChannelStore) *OAuthHandler {
+	return &OAuthHandler{cfg: cfg, settings: settings, channels: channels}
 }
 
 // GetAuthURL returns the Google consent URL for the frontend to navigate the
@@ -27,12 +28,17 @@ func NewOAuthHandler(cfg *config.Config, channels *db.ConnectedChannelStore) *OA
 // Authorization header — so the frontend calls this (authenticated, like
 // any other API request) first and then does the navigation itself.
 func (h *OAuthHandler) GetAuthURL(w http.ResponseWriter, r *http.Request) {
-	oauthCfg, err := googleoauth.NewOAuthConfig(h.cfg)
+	settings, err := h.settings.Get(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load settings")
+		return
+	}
+	oauthCfg, err := googleoauth.NewOAuthConfig(settings.GoogleClientID, settings.GoogleClientSecret, settings.GoogleOAuthRedirectURL)
 	if err != nil {
 		writeError(w, http.StatusPreconditionFailed, err.Error())
 		return
 	}
-	state, err := googleoauth.NewState(h.cfg.GoogleClientSecret)
+	state, err := googleoauth.NewState(settings.GoogleClientSecret)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not create oauth state")
 		return
@@ -60,14 +66,19 @@ func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oauthCfg, err := googleoauth.NewOAuthConfig(h.cfg)
+	settings, err := h.settings.Get(ctx)
+	if err != nil {
+		h.redirectWithError(w, r, "Không tải được cấu hình.")
+		return
+	}
+	oauthCfg, err := googleoauth.NewOAuthConfig(settings.GoogleClientID, settings.GoogleClientSecret, settings.GoogleOAuthRedirectURL)
 	if err != nil {
 		h.redirectWithError(w, r, err.Error())
 		return
 	}
 
 	state := r.URL.Query().Get("state")
-	if err := googleoauth.VerifyState(h.cfg.GoogleClientSecret, state); err != nil {
+	if err := googleoauth.VerifyState(settings.GoogleClientSecret, state); err != nil {
 		h.redirectWithError(w, r, "Phiên kết nối không hợp lệ hoặc đã hết hạn, hãy thử lại.")
 		return
 	}

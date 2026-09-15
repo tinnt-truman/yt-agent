@@ -3,11 +3,15 @@ import {
   deleteVideoPromptSeriesJob,
   listVideoPromptSeriesJobs,
   retryVideoPromptSeriesJob,
+  reviseVideoPromptSeriesJob,
   stepVideoPromptSeriesJob,
+  updateVideoPromptSeriesJob,
 } from '../api/client'
 import { formatDate } from '../lib/format'
-import type { VideoPromptSeriesJob } from '../types'
+import type { VideoPromptSeries, VideoPromptSeriesJob } from '../types'
 import { CopyButton } from '../components/CopyButton'
+import { normalizeSeriesForEdit, VideoPromptSeriesEditor } from '../components/VideoPromptSeriesEditor'
+import { ReviseWithFeedback } from '../components/ReviseWithFeedback'
 import { StatusBadge } from '../components/StatusBadge'
 
 const POLL_INTERVAL_MS = 2000
@@ -20,6 +24,9 @@ export default function VideoPromptSeriesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
+  const [revisingId, setRevisingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<VideoPromptSeries | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -30,6 +37,13 @@ export default function VideoPromptSeriesPage() {
   }, [])
 
   const selected = items.find((i) => i.id === selectedId) ?? null
+
+  // Leaving unsaved edits behind when switching to a different series (or
+  // it gets regenerated out from under the editor) would be surprising —
+  // drop the draft whenever the selection changes.
+  useEffect(() => {
+    setDraft(null)
+  }, [selectedId])
 
   // A job left "pending" (e.g. the tab was closed mid-generation) has no
   // background worker to finish it — advance it on an interval, same as
@@ -72,6 +86,39 @@ export default function VideoPromptSeriesPage() {
       setActionError(err instanceof Error ? err.message : 'Không thử lại được prompt')
     } finally {
       setRetryingId(null)
+    }
+  }
+
+  async function handleRevise(item: VideoPromptSeriesJob, feedback: string) {
+    setActionError(null)
+    setRevisingId(item.id)
+    try {
+      const updated = await reviseVideoPromptSeriesJob(item.id, feedback)
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không gửi được góp ý cho AI')
+    } finally {
+      setRevisingId(null)
+    }
+  }
+
+  function handleStartEdit(series: VideoPromptSeries) {
+    setActionError(null)
+    setDraft(normalizeSeriesForEdit(series))
+  }
+
+  async function handleSaveEdit(item: VideoPromptSeriesJob) {
+    if (!draft) return
+    setActionError(null)
+    setSavingEdit(true)
+    try {
+      const updated = await updateVideoPromptSeriesJob(item.id, draft)
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+      setDraft(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không lưu được prompt')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -170,15 +217,47 @@ export default function VideoPromptSeriesPage() {
               </div>
             )}
 
-            {selected && selected.series && (
+            {selected && selected.series && draft && (
               <div className="space-y-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
-                    {selected.videoTitle}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {selected.episodeCount} tập · {formatDate(selected.createdAt)}
-                  </p>
+                <VideoPromptSeriesEditor value={draft} onChange={setDraft} />
+                <div className="flex gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    onClick={() => handleSaveEdit(selected)}
+                    disabled={savingEdit}
+                    className="rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {savingEdit ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
+                  </button>
+                  <button
+                    onClick={() => setDraft(null)}
+                    disabled={savingEdit}
+                    className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Huỷ
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selected && selected.series && !draft && (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
+                      {selected.series.seriesTitle || selected.videoTitle}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {selected.episodeCount} tập · {formatDate(selected.createdAt)}
+                    </p>
+                  </div>
+                  {selected.status !== 'pending' && (
+                    <button
+                      onClick={() => handleStartEdit(selected.series!)}
+                      className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Chỉnh sửa
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -317,6 +396,16 @@ export default function VideoPromptSeriesPage() {
                     </div>
                   ))}
                 </div>
+
+                {selected.status !== 'pending' && (
+                  <div className="border-t border-slate-100 pt-3">
+                    <p className="mb-1.5 text-xs font-medium text-slate-500">Không ưng ý? Góp ý cho AI</p>
+                    <ReviseWithFeedback
+                      onSubmit={(feedback) => handleRevise(selected, feedback)}
+                      busy={revisingId === selected.id}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

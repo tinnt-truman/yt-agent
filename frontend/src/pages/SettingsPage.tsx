@@ -46,6 +46,9 @@ export default function SettingsPage() {
   const [openrouterApiKey, setOpenrouterApiKey] = useState('')
   const [ninerouterApiKey, setNinerouterApiKey] = useState('')
   const [ninerouterBaseUrl, setNinerouterBaseUrl] = useState('')
+  const [googleClientId, setGoogleClientId] = useState('')
+  const [googleClientSecret, setGoogleClientSecret] = useState('')
+  const [googleOauthRedirectUrl, setGoogleOauthRedirectUrl] = useState('')
   const [aiProvider, setAiProvider] = useState<AIProvider>('deepseek')
   const [aiModel, setAiModel] = useState('deepseek-v4-pro')
   const [customModel, setCustomModel] = useState('')
@@ -62,6 +65,7 @@ export default function SettingsPage() {
       setAiModel(KNOWN_MODELS.has(m) ? m : 'custom')
       setCustomModel(KNOWN_MODELS.has(m) ? '' : m)
       setNinerouterBaseUrl(settings.ninerouterBaseUrl || '')
+      setGoogleOauthRedirectUrl(settings.googleOauthRedirectUrl || '')
       setMaxVideos(settings.maxVideos || 50)
     }
   }, [settings])
@@ -101,6 +105,10 @@ export default function SettingsPage() {
         // wrong provider.
         aiProvider,
         aiModel: model,
+        googleClientId: googleClientId || undefined,
+        googleClientSecret: googleClientSecret || undefined,
+        // Not a secret, same reasoning as ninerouterBaseUrl above.
+        googleOauthRedirectUrl: googleOauthRedirectUrl.trim(),
         maxVideos,
       })
       await refresh()
@@ -108,6 +116,8 @@ export default function SettingsPage() {
       setDeepseekApiKey('')
       setOpenrouterApiKey('')
       setNinerouterApiKey('')
+      setGoogleClientId('')
+      setGoogleClientSecret('')
       setSaved(true)
       if (updated.configured) {
         setTimeout(() => navigate('/'), 800)
@@ -302,6 +312,65 @@ export default function SettingsPage() {
             )}
           </>
         )}
+
+        <div className="border-t border-slate-200 pt-5">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Google OAuth <span className="font-normal text-slate-500">(tuỳ chọn — cho "Kênh của tôi")</span>
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Cần thiết để kết nối một kênh YouTube thật và xem Analytics/doanh thu riêng tư. Tạo
+            OAuth Client tại Google Cloud Console → APIs & Services → Credentials.
+          </p>
+
+          <div className="mt-4 space-y-5">
+            <Field
+              label="Google Client ID"
+              hint={
+                settings?.googleClientIdSet
+                  ? `Đã lưu (${settings.googleClientIdPreview}). Để trống nếu không muốn đổi.`
+                  : undefined
+              }
+            >
+              <input
+                type="password"
+                value={googleClientId}
+                onChange={(e) => setGoogleClientId(e.target.value)}
+                placeholder={settings?.googleClientIdSet ? '••••••••' : '....apps.googleusercontent.com'}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+              />
+            </Field>
+
+            <Field
+              label="Google Client Secret"
+              hint={
+                settings?.googleClientSecretSet
+                  ? `Đã lưu (${settings.googleClientSecretPreview}). Để trống nếu không muốn đổi.`
+                  : undefined
+              }
+            >
+              <input
+                type="password"
+                value={googleClientSecret}
+                onChange={(e) => setGoogleClientSecret(e.target.value)}
+                placeholder={settings?.googleClientSecretSet ? '••••••••' : 'GOCSPX-...'}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+              />
+            </Field>
+
+            <Field
+              label="Google OAuth Redirect URL"
+              hint='URL callback của backend, phải khớp chính xác với "Authorized redirect URI" đã đăng ký trên Google Cloud Console, vd: https://ten-mien-backend.vercel.app/api/oauth/google/callback'
+            >
+              <input
+                type="text"
+                value={googleOauthRedirectUrl}
+                onChange={(e) => setGoogleOauthRedirectUrl(e.target.value)}
+                placeholder="https://.../api/oauth/google/callback"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+              />
+            </Field>
+          </div>
+        </div>
 
         <Field label="Số video tối đa lấy mẫu mỗi kênh" hint="Càng nhiều càng chính xác nhưng tốn quota YouTube API hơn.">
           <input

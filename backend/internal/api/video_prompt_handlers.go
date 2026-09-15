@@ -171,14 +171,112 @@ func (h *VideoPromptHandler) RetryVideoPromptSeries(w http.ResponseWriter, r *ht
 	writeJSON(w, http.StatusOK, job)
 }
 
+// ReviseVideoPromptSeries queues a human-written revision note against an
+// already generated series — the next Step call asks the AI to edit the
+// existing series accordingly instead of generating a fresh one (see
+// runSeriesGeneration). Unlike RetryVideoPromptSeries (from-scratch
+// regeneration), this requires a series to already exist.
+func (h *VideoPromptHandler) ReviseVideoPromptSeries(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req reviseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Feedback = strings.TrimSpace(req.Feedback)
+	if req.Feedback == "" {
+		writeError(w, http.StatusBadRequest, "feedback is required")
+		return
+	}
+
+	job, err := h.series.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "video prompt series job not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch video prompt series job")
+		return
+	}
+	if job.Status == models.VideoPromptSeriesStatusPending {
+		writeError(w, http.StatusConflict, "video prompt series job is already generating")
+		return
+	}
+	if len(job.SeriesJSON) == 0 {
+		writeError(w, http.StatusConflict, "series must be generated at least once before it can be revised")
+		return
+	}
+
+	if err := h.series.SetRevisionPending(r.Context(), id, req.Feedback); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not queue video prompt series revision")
+		return
+	}
+	job, err = h.series.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not fetch video prompt series job")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+// UpdateVideoPromptSeries overwrites a series with one a human edited
+// directly in the UI — saved synchronously (no AI call, no pending step).
+// Works from any status, same rationale as ScriptHandler.UpdateScript.
+func (h *VideoPromptHandler) UpdateVideoPromptSeries(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var series models.VideoPromptSeries
+	if err := json.NewDecoder(r.Body).Decode(&series); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(series.Episodes) == 0 {
+		writeError(w, http.StatusBadRequest, "series must have at least one episode")
+		return
+	}
+
+	if err := h.series.SetDone(r.Context(), id, series); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not save video prompt series")
+		return
+	}
+	job, err := h.series.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "video prompt series job not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not fetch video prompt series job")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+// runSeriesGeneration either revises the existing series per a queued
+// RevisionFeedback note, or — the common case — generates a fresh one from
+// the job's reference video info. See ScriptHandler.runGeneration for the
+// same pattern.
 func (h *VideoPromptHandler) runSeriesGeneration(ctx context.Context, job *models.VideoPromptSeriesJob) {
 	settings, err := h.settings.Get(ctx)
 	if err != nil {
 		_ = h.series.SetFailed(ctx, job.ID, "could not load settings")
 		return
 	}
-
 	aiClient := ai.NewClientFromSettings(settings)
+
+	if job.RevisionFeedback != "" && len(job.SeriesJSON) > 0 {
+		var existing models.VideoPromptSeries
+		if err := json.Unmarshal(job.SeriesJSON, &existing); err != nil {
+			_ = h.series.SetFailed(ctx, job.ID, "could not read existing series for revision")
+			return
+		}
+		revised, err := aiClient.ReviseVideoPromptSeries(ctx, existing, job.RevisionFeedback, job.EpisodeCount, job.ScenesPerEpisode)
+		if err != nil {
+			_ = h.series.SetFailed(ctx, job.ID, err.Error())
+			return
+		}
+		_ = h.series.SetDone(ctx, job.ID, *revised)
+		return
+	}
+
 	series, err := aiClient.GenerateVideoPromptSeries(ctx, models.VideoPromptSeriesRequest{
 		Title:            job.VideoTitle,
 		Description:      job.VideoDescription,
