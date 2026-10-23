@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "skills": {
+    "assembly-and-delivery": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/assembly-and-delivery/SKILL.md",
+      "computedHash": "5039c0d12e14f3fa638d97cb6447d7d428e3bd19eab00289fe531aec1b5422c5"
+    },
+    "character-consistency": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/character-consistency/SKILL.md",
+      "computedHash": "7fc82bc3728fd326e4e97eea03b1568f9ca3387a024d4c09a649b408dbc133a7"
+    },
+    "cinematic-direction": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cinematic-direction/SKILL.md",
+      "computedHash": "dd28d896442961330d38a95e9875cf051be8c39e7d2fa32ad5ebcda03640a726"
+    },
+    "coverage-report": {
+      "source": "Gonzih/skills-screenwriting",
+      "sourceType": "github",
+      "skillPath": "skills/coverage-report/SKILL.md",
+      "computedHash": "af0fee92d8c6177553161d9edb3b01baa481544c56a4a9255725bccd23fed9c4"
+    },
+    "dialogue-and-audio": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/dialogue-and-audio/SKILL.md",
+      "computedHash": "2c01289cbd876018494b69bf2173582b04aaba92d2d0185aae0a1f054e1590ba"
+    },
+    "dialogue-punch-up": {
+      "source": "Gonzih/skills-screenwriting",
+      "sourceType": "github",
+      "skillPath": "skills/dialogue-punch-up/SKILL.md",
+      "computedHash": "01ce78bb1bace48ba5222deb5ab508eecadc7a27d45e49ec2705f21e9e4ef4d8"
+    },
+    "document-to-narration": {
+      "source": "jwynia/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/education/document-to-narration/SKILL.md",
+      "computedHash": "60a0f793b8ea83d6a1164513307d8a218e90a7af5aadba534e4bf02e065ca0a2"
+    },
+    "elevenlabs-tts": {
+      "source": "mengto/skills",
+      "sourceType": "github",
+      "skillPath": "agent-skills/codex/elevenlabs-tts/SKILL.md",
+      "computedHash": "7f7980e8201524e33c427a5ab73b9e430bae61531dd9faa470963b6cd0b928f4"
+    },
+    "facial-expression-prompting": {
+      "source": "zhouwei713/facial-expression-prompting",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "0c7a027b2bec8b7c03a7606217d490d4238853700b99bd413deac3c57b6003d5"
+    },
+    "model-adapters": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/model-adapters/SKILL.md",
+      "computedHash": "85df70412b8509fbda40fc49069dd4eec697cf115d8d74d24e2fa54d477da569"
+    },
+    "muse-google-veo-web": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/muse-google-veo-web/SKILL.md",
+      "computedHash": "013b7d268f49148defb781443ded5e15ff33cd43c1e830d49503ba52139258d1"
+    },
+    "pitch-treatment": {
+      "source": "Gonzih/skills-screenwriting",
+      "sourceType": "github",
+      "skillPath": "skills/pitch-treatment/SKILL.md",
+      "computedHash": "feefcf63a884a382507736483794b585a5ec06dde146b8202e3e02b9e56e22a4"
+    },
+    "scene-outline": {
+      "source": "Gonzih/skills-screenwriting",
+      "sourceType": "github",
+      "skillPath": "skills/scene-outline/SKILL.md",
+      "computedHash": "ed8733e6a41afb0c56e1cc6bd3c0b342e1323fc4b8f6663f0ae545d96743619a"
+    },
+    "story-and-shots": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/story-and-shots/SKILL.md",
+      "computedHash": "cf6c25ffda8baa84bb6dc9e8212e9b8378183f865cbcac733f0da2a01cd2409d"
+    },
+    "video-character-design": {
+      "source": "agentara/skills",
+      "sourceType": "github",
+      "skillPath": "skills/aigc/video-character-design/SKILL.md",
+      "computedHash": "08113314048da4343bc1f14dbe1bae2c1c1cdfe7e88f712d8b6310278e09af73"
+    },
+    "video-prompt-craft": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/video-prompt-craft/SKILL.md",
+      "computedHash": "b6ec6c2cef84a352712ad7be4131a84d26be918b6037b2702e83165e85e72593"
+    },
+    "video-qa": {
+      "source": "svenkatreddy/universal-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/video-qa/SKILL.md",
+      "computedHash": "131af9e390c5ba9682c5e332dfd34ad352b1c02a958a236cd3e963c9876031c7"
+    }
+  }
+}
